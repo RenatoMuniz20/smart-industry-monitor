@@ -1,0 +1,3 @@
+timestamp,machine_id,machine_type,vibration_rms,temperature_motor,current_phase_avg,pressure_level,rpm,operating_mode,hours_since_maintenance,ambient_temp,rul_hours,failure_within_24h,failure_type,estimated_repair_cost
+2024-01-01 00:00:00,1,CNC,0.71,49.7,3.5,21.3,862.7,idle,274.15,13.6,60.65,0,none,0
+2024-01-01 00:21:00,invalid,CNC,0.71,49.7,,21.3,862.7,idle,274.15,13.6,60.65,0,none,0
