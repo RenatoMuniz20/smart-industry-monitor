@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 import time
 
+from test_ten_machines import ten_machines, unavailable_broker
+
 CLIENT = './build/test_mqtt_publisher'
 
 
@@ -368,6 +370,7 @@ def real_broker():
                             if line.startswith('{')]
                 assert received == [{'sequence': 1}, {'sequence': 2}], received
             replayer_cases(root, port)
+            ten_machines(root, port)
         finally:
             for process in (subscriber, broker):
                 if process is not None:
@@ -384,6 +387,7 @@ if __name__ == '__main__':
         result = run_replayer('../data/predictive_maintenance_v3.csv',
                               unavailable.getsockname()[1], success=False)
         assert 'Erro ao conectar' in result.stderr
+        unavailable_broker(unavailable.getsockname()[1])
     for scenario in ('ack', 'reject', 'silent-connack', 'silent-puback', 'wrong-ack', 'disconnect'):
         controlled_peer(scenario)
         print(f'PASS: {scenario}', flush=True)

@@ -300,3 +300,70 @@ inferior e sem limites superiores apertados. Um executável exclusivo de teste
 usa o linker GNU para observar chamadas de `nanosleep`, verificar ausência de
 pausas iniciais/finais, contar duas esperas para três mensagens e injetar
 `EINTR` e erro. Esse wrapper não integra o executável de produção.
+
+## Dez máquinas simultâneas (SIM-03.4)
+
+O script Bash `dataset-replayer/scripts/run-ten-machines.sh` inicia dez
+instâncias independentes do executável C, todas com `--publish`:
+
+| Tipo original | IDs |
+| --- | --- |
+| CNC | 1, 2, 3 |
+| Pump | 6, 7, 8, 9 |
+| Compressor | 11, 12, 13 |
+
+Os tipos são preservados pelo Replayer a partir do CSV. O script não altera
+payloads, timestamps ou tópicos. Requer Bash 5.1 ou superior (`wait -n -p`),
+Linux e as dependências do Replayer. Compile e inicie o broker em outro
+terminal antes de executar, a partir da raiz do repositório:
+
+```sh
+make -C dataset-replayer all
+mosquitto -c config/mosquitto/mosquitto.conf -v
+```
+
+No terminal da demonstração:
+
+```sh
+# Dez registros por máquina, intervalo de 1000 ms, broker 127.0.0.1:1883
+./dataset-replayer/scripts/run-ten-machines.sh
+
+# Três registros por máquina, intervalo de 100 ms e outro broker
+LIMIT=3 INTERVAL_MS=100 MQTT_HOST=127.0.0.1 MQTT_PORT=1884 \
+  ./dataset-replayer/scripts/run-ten-machines.sh
+```
+
+Configuração por variáveis de ambiente, sem argumentos posicionais:
+
+| Variável | Padrão | Limites |
+| --- | --- | --- |
+| `LIMIT` | `10` | 1 a 2147483647, máximo por máquina |
+| `INTERVAL_MS` | `1000` | 1 a 60000 ms |
+| `MQTT_HOST` | `127.0.0.1` | Não vazio, sem começar com `--` |
+| `MQTT_PORT` | `1883` | 1 a 65535 |
+| `CSV_PATH` | Dataset do repositório | Arquivo legível |
+
+Os números devem conter dígitos, sem sinal nem zeros à esquerda. O script
+resolve o executável e o CSV padrão em relação à sua localização, permitindo
+executá-lo de outro diretório; um `CSV_PATH` relativo usa o diretório atual.
+O limite é um máximo: se o CSV terminar antes, vale o comportamento normal
+do Replayer. Saídas das dez instâncias compartilham o terminal e podem se
+intercalar. Cada instância mantém a cadência sequencial e usa o Client ID
+único gerado pelo Replayer (máquina e PID), sem sincronização entre máquinas.
+
+O script registra os PIDs em stderr, aguarda todos e retorna 0 somente se
+todas as instâncias concluírem com sucesso. A primeira falha detectada causa
+retorno 1, envio de SIGTERM às demais e coleta de todos os filhos com `wait`.
+Ao receber Ctrl+C/SIGINT ou SIGTERM, faz a mesma limpeza e retorna 130 ou 143,
+respectivamente. A interrupção pode ocorrer com publicações em andamento:
+mensagens recebidas pelo broker sem PUBACK observado não são contabilizadas.
+Não há reconexão, reinício automático ou serviço de gerenciamento. SIGKILL,
+falha do sistema ou processos presos em estado de kernel não interrompível
+não permitem garantir a limpeza pelo script.
+
+`make test` inclui validações locais da configuração do script, sem broker.
+`make test-mqtt` usa o Mosquitto temporário e verifica dez processos reais
+simultâneos, IDs, tipos e tópicos, três mensagens por máquina, intervalo,
+encerramento normal, SIGINT/SIGTERM, falha de um filho e broker indisponível.
+Os testes conferem que os PIDs dos filhos não existem após o encerramento.
+Permanecem as limitações de timeout DNS/TCP e keepalive descritas anteriormente.

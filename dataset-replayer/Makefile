@@ -38,7 +38,7 @@ build/test_replayer_timing: src/main.c src/csv_reader.c src/telemetry.c tests/wr
 	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -Wl,--wrap=nanosleep -o $@ src/main.c src/csv_reader.c src/telemetry.c tests/wrap_nanosleep.c build/telemetry_json.o build/mqtt_publisher.o $(MQTT_LDLIBS) $(LDLIBS)
 
 test-mqtt: $(MQTT_TEST_TARGET) $(TARGET) build/test_replayer_timing
-	python3 tests/test_mqtt_integration.py
+	python3 -B tests/test_mqtt_integration.py
 
 test: $(MQTT_TEST_TARGET) $(TEST_TARGET) $(TELEMETRY_TEST_TARGET) $(JSON_TEST_TARGET) $(TARGET)
 	./$(TEST_TARGET)
@@ -46,6 +46,7 @@ test: $(MQTT_TEST_TARGET) $(TEST_TARGET) $(TELEMETRY_TEST_TARGET) $(JSON_TEST_TA
 	./$(JSON_TEST_TARGET)
 	sh tests/test_cli.sh
 	./$(MQTT_TEST_TARGET)
+	python3 tests/test_ten_machines.py
 
 build:
 	mkdir -p $@
