@@ -125,3 +125,81 @@ Execute `make -C dataset-replayer test` a partir da raiz para rodar os testes
 existentes e `test_telemetry_json`, incluindo a integração da normalização com
 o JSON. O teste de locale alternativo informa `SKIP` se nenhum dos locales
 candidatos estiver instalado; os demais testes continuam normalmente.
+
+## Cliente publicador MQTT (SIM-03.2)
+
+O módulo `mqtt_publisher.h` usa libmosquitto, MQTT 3.1.1 e uma conexão
+reutilizável. Ainda não está integrado ao CSV nem à CLI. No Arch Linux:
+
+```sh
+sudo pacman -S mosquitto pkgconf
+pkg-config --modversion libmosquitto
+make -C dataset-replayer all
+make -C dataset-replayer test
+make -C dataset-replayer test-mqtt
+```
+
+`all` compila o objeto MQTT. Somente o teste MQTT é vinculado à libmosquitto;
+o executável principal mantém suas dependências anteriores. `make test` inclui
+validações locais do módulo e não abre conexões nem exige broker ativo.
+`test-mqtt` requer Python 3 (biblioteca padrão), Mosquitto, `mosquitto_sub` e
+`stdbuf` (GNU coreutils). Inicia e encerra um broker temporário em loopback
+com porta dinâmica, sem interferir no broker de desenvolvimento em 1883.
+Também usa pares TCP controlados para verificar recusa de CONNACK, ausência
+de CONNACK/PUBACK, PUBACK de outro identificador e desconexão. As threads
+utilizadas pelo harness Python são exclusivas dos testes; o módulo C não cria
+threads. Os processos e arquivos temporários são removidos ao final.
+
+Interface pública (retorno 0 em sucesso e -1 em erro):
+
+```c
+int mqtt_publisher_connect(MqttPublisher **out, const char *host, int port,
+                           const char *client_id, int timeout_ms);
+int mqtt_publisher_publish(MqttPublisher *publisher, int machine_id,
+                           const char *json);
+int mqtt_publisher_close(MqttPublisher **publisher);
+int mqtt_publisher_topic(int machine_id, char *buffer, size_t capacity);
+```
+
+Inicialize `MqttPublisher *publisher = NULL` e passe seu endereço a `connect`.
+Use `127.0.0.1`, porta 1883 e timeout de 5000 ms para desenvolvimento local.
+Host, porta e client ID são fornecidos pelo chamador. O client ID deve ser
+não vazio e único entre os clientes do broker; recomenda-se combinar máquina
+e PID. O chamador é responsável por essa unicidade. O timeout aceita 1 a
+5000 ms. Somente um contexto pode estar ativo por processo, com chamadas
+sequenciais e sem uso concorrente. O módulo controla `mosquitto_lib_init` e
+`mosquitto_lib_cleanup`; não deve compartilhar o processo com outros usuários
+independentes da libmosquitto.
+
+`connect` aguarda CONNACK aceito via callback antes de fornecer o contexto.
+`publish` constrói `smart-industry/machines/{machine_id}/telemetry`, exigindo
+ID positivo, e envia uma string JSON não vazia com QoS 1 e retain desabilitado.
+O JSON deve vir do serializador; o módulo MQTT não implementa outro parser.
+A função de tópico inclui o terminador na capacidade e preserva o destino
+em erro. O envio retorna sucesso somente após callback de publicação com o
+mesmo MID retornado por `mosquitto_publish`, que em QoS 1 indica recebimento
+do PUBACK. O sucesso inicial de `mosquitto_publish` sozinho não basta.
+
+QoS 1 confirma a recepção pelo broker e permite duplicação; não confirma o
+processamento pelos assinantes nem persistência em disco. As chamadas usam
+`mosquitto_loop` com esperas bloqueantes curtas e prazo monotônico. Não há
+threads no módulo, reconexão automática, repetição de publicação, TLS,
+autenticação ou persistência. O client usa sessão limpa. Chamadas de publicação
+sucessivas reutilizam a mesma conexão.
+
+**Limite de timeout:** a API documentada para uso com `mosquitto_loop` exige
+`mosquitto_connect`, cuja preparação DNS/TCP é síncrona. O prazo começa antes
+dessa chamada, mas não consegue interrompê-la: a espera por CONNACK/PUBACK é
+limitada, enquanto DNS/TCP podem exceder 5 segundos conforme o sistema
+operacional. Portanto não há garantia de timeout total de conexão para hosts
+remotos indisponíveis. O módulo evita sinais globais e threads para contornar
+essa limitação. Referência: https://mosquitto.org/api/files/mosquitto-h.html.
+
+Erros de rede e timeout invalidam o contexto: encerre-o e informe a falha ao
+chamador. Um timeout de PUBACK não prova que o broker deixou de receber a
+mensagem. Argumentos inválidos não invalidam uma conexão saudável. `close`
+aceita ponteiros nulos, tenta DISCONNECT quando a conexão está saudável,
+destrói o cliente, finaliza a biblioteca e limpa o ponteiro mesmo em erro.
+Após encerrar, um novo contexto pode ser aberto. Não use aliases do ponteiro
+já liberado. Como não há loop em segundo plano, longos períodos sem chamadas
+podem exceder o keepalive de 60 segundos e causar desconexão.
