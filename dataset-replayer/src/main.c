@@ -92,13 +92,27 @@ int main(int argc, char *argv[])
     ReplayerContext context = {0};
     int has_machine = 0;
     int has_limit = 0;
+    int publish = 0;
+    const char *mqtt_host = "127.0.0.1";
+    int mqtt_port = 1883;
+    int interval_ms = 1000;
+    int has_host = 0;
+    int has_port = 0;
+    int has_interval = 0;
 
     if (argc < 4) {
         goto usage;
     }
-    for (int i = 2; i < argc; i += 2) {
+    for (int i = 2; i < argc; ++i) {
         uintmax_t value;
 
+        if (strcmp(argv[i], "--publish") == 0) {
+            if (publish) {
+                goto usage;
+            }
+            publish = 1;
+            continue;
+        }
         if (i + 1 >= argc) {
             goto usage;
         }
@@ -114,12 +128,38 @@ int main(int argc, char *argv[])
             }
             context.limit = (size_t)value;
             has_limit = 1;
+        } else if (strcmp(argv[i], "--mqtt-host") == 0 && !has_host) {
+            if (argv[i + 1][0] == '\0' || strncmp(argv[i + 1], "--", 2) == 0) {
+                goto usage;
+            }
+            mqtt_host = argv[i + 1];
+            has_host = 1;
+        } else if (strcmp(argv[i], "--mqtt-port") == 0 && !has_port) {
+            if (parse_positive(argv[i + 1], 65535, &value) != 0) {
+                goto usage;
+            }
+            mqtt_port = (int)value;
+            has_port = 1;
+        } else if (strcmp(argv[i], "--interval-ms") == 0 && !has_interval) {
+            if (parse_positive(argv[i + 1], 60000, &value) != 0) {
+                goto usage;
+            }
+            interval_ms = (int)value;
+            has_interval = 1;
         } else {
             goto usage;
         }
+        ++i; /* All options except --publish consume a value. */
     }
-    if (!has_machine) {
+    if (!has_machine || (!publish && (has_host || has_port || has_interval))) {
         goto usage;
+    }
+    if (publish) {
+        fprintf(stderr, "Modo --publish reservado para a próxima subetapa; "
+                "publicação MQTT ainda não integrada "
+                "(host=%s port=%d interval_ms=%d).\n",
+                mqtt_host, mqtt_port, interval_ms);
+        return 1;
     }
     if (csv_read_file(argv[1], &row_count, &error_line, select_row, &context) != 0) {
         if (error_line != 0) {
@@ -136,6 +176,8 @@ int main(int argc, char *argv[])
     return 0;
 
 usage:
-    fprintf(stderr, "Uso: %s <csv> --machine-id <id> [--limit <quantidade>]\n", argv[0]);
+    fprintf(stderr, "Uso: %s <csv> --machine-id <id> [--limit <quantidade>] "
+            "[--publish [--mqtt-host <host>] [--mqtt-port <1..65535>] "
+            "[--interval-ms <1..60000>]]\n", argv[0]);
     return 1;
 }

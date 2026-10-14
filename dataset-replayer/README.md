@@ -33,7 +33,7 @@ dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --mac
 make -C dataset-replayer run ARGS="../data/predictive_maintenance_v3.csv --machine-id 6 --limit 5"
 ```
 
-A sintaxe é `dataset-replayer <csv> --machine-id <id> [--limit <quantidade>]`.
+A sintaxe original é `dataset-replayer <csv> --machine-id <id> [--limit <quantidade>]`.
 `--machine-id` é obrigatório; ambos os valores devem ser inteiros positivos.
 Sem `--limit`, todos os registros da máquina são selecionados. Uma máquina
 inexistente encerra normalmente, com uma mensagem e zero registros.
@@ -203,3 +203,33 @@ destrói o cliente, finaliza a biblioteca e limpa o ponteiro mesmo em erro.
 Após encerrar, um novo contexto pode ser aberto. Não use aliases do ponteiro
 já liberado. Como não há loop em segundo plano, longos períodos sem chamadas
 podem exceder o keepalive de 60 segundos e causar desconexão.
+
+
+## Parâmetros de publicação na CLI (SIM-03.3.1)
+
+A CLI reconhece `--publish`, com as opções de configuração abaixo:
+
+| Opção | Padrão | Validação |
+| --- | --- | --- |
+| `--mqtt-host <host>` | `127.0.0.1` | Texto não vazio, sem começar com `--` |
+| `--mqtt-port <porta>` | `1883` | Inteiro de 1 a 65535 |
+| `--interval-ms <ms>` | `1000` | Inteiro de 1 a 60000 |
+
+`--machine-id` continua obrigatório e `--limit` mantém sua validação. As
+opções podem aparecer em qualquer ordem após o caminho CSV; duplicações,
+valores ausentes e opções MQTT sem `--publish` são rejeitados. Os valores
+numéricos aceitam somente dígitos, sem sinais, espaços ou parte fracionária.
+
+Nesta subetapa, `--publish` apenas valida os argumentos e informa em stderr
+que a publicação ainda não está integrada, incluindo a configuração efetiva.
+Encerra com código 1, sem abrir o CSV, conectar ao broker, publicar ou aguardar
+intervalos. Exemplo com os valores padrão:
+
+```sh
+dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --limit 5 --publish
+```
+
+Sem `--publish`, a execução original permanece disponível. O reconhecimento
+sintático de um host não verifica sua resolução nem sua disponibilidade.
+Os testes desses parâmetros fazem parte de `make -C dataset-replayer test`
+e não exigem broker.
