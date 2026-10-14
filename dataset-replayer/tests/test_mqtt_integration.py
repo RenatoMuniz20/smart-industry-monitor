@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local Mosquitto plus controlled protocol peers; no public broker required."""
 import concurrent.futures
+import csv
 import json
 from pathlib import Path
 import shutil
@@ -97,6 +98,147 @@ def controlled_peer(mode):
             future.result(timeout=4)
 
 
+def run_replayer(path, port, machine=6, limit=None, success=True, extra=()):
+    command = ['./build/dataset-replayer', str(path), '--publish',
+               '--machine-id', str(machine), '--mqtt-host', '127.0.0.1',
+               '--mqtt-port', str(port), *extra]
+    if limit is not None:
+        command += ['--limit', str(limit)]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=8)
+    assert (result.returncode == 0) == success, result
+    if not success:
+        assert result.stdout == '', result
+        assert result.stderr, result
+    return result
+
+
+def replayer_cases(root, port):
+    dataset = Path('../data/predictive_maintenance_v3.csv')
+    with dataset.open(newline='') as source:
+        reader = csv.DictReader(source)
+        fields = reader.fieldnames
+        rows = []
+        for row in reader:
+            if row['machine_id'] == '6':
+                rows.append(row)
+                if len(rows) == 3:
+                    break
+    assert len(rows) == 3
+
+    def receive(path, machine, count, limit=None, extra=()):
+        output = root / 'replayer-messages'
+        debug_path = root / 'replayer-debug'
+        with output.open('w') as messages, debug_path.open('w') as debug:
+            sub = subprocess.Popen([
+                'stdbuf', '-oL', '-eL', 'mosquitto_sub', '-h', '127.0.0.1',
+                '-p', str(port), '-V', 'mqttv311', '-q', '1', '-t',
+                'smart-industry/machines/+/telemetry', '-C', str(count),
+                '-W', '5', '-d', '-v'], stdout=messages, stderr=debug)
+            try:
+                deadline = time.monotonic() + 4
+                while 'received SUBACK' not in output.read_text() + debug_path.read_text():
+                    assert sub.poll() is None and time.monotonic() < deadline
+                    time.sleep(.05)
+                result = run_replayer(path, port, machine, limit, extra=extra)
+                assert result.stdout == f'Publicações confirmadas: {count}\n', result
+                assert result.stderr == '', result
+                assert sub.wait(timeout=6) == 0
+                received = []
+                for line in output.read_text().splitlines():
+                    if line.startswith('smart-industry/'):
+                        topic, payload = line.split(' ', 1)
+                        assert topic == f'smart-industry/machines/{machine}/telemetry'
+                        data = json.loads(payload)
+                        assert set(data) == {'machine_id', 'machine_type', 'timestamp',
+                                            'temperature', 'current', 'power', 'state',
+                                            'failure_within_24h'}
+                        assert data['machine_id'] == machine
+                        assert data['power'] is None
+                        received.append(data)
+                assert len(received) == count
+                return received
+            finally:
+                if sub.poll() is None:
+                    sub.terminate()
+                sub.wait(timeout=5)
+
+    # Real dataset end-to-end, including an explicit interval accepted but unused.
+    received = receive(dataset, 6, 1, 1, ('--interval-ms', '60000'))
+    assert received[0]['timestamp'] == rows[0]['timestamp']
+    assert received[0]['machine_type'] == rows[0]['machine_type']
+    assert received[0]['temperature'] == float(rows[0]['temperature_motor'])
+    assert received[0]['current'] == float(rows[0]['current_phase_avg'])
+    assert received[0]['failure_within_24h'] == int(rows[0]['failure_within_24h'])
+    assert received[0]['state'] == rows[0]['operating_mode'].upper()
+    received = receive(dataset, 6, 3, 3)
+    assert [r['timestamp'] for r in received] == [r['timestamp'] for r in rows]
+
+    fixture = root / 'replayer.csv'
+    def write_rows(selected):
+        with fixture.open('w', newline='') as target:
+            writer = csv.DictWriter(target, fieldnames=fields, lineterminator='\n')
+            writer.writeheader()
+            writer.writerows(selected)
+
+    other = dict(rows[0], machine_id='7', failure_within_24h='2')
+    missing = dict(rows[1], temperature_motor='', current_phase_avg='')
+    invalid = dict(rows[2], failure_within_24h='2')
+    write_rows([other, rows[0], missing, invalid])
+    received = receive(fixture, 6, 2, 2)
+    assert received[1]['temperature'] is None and received[1]['current'] is None
+    # A selected invalid row aborts after two confirmations, without success output.
+    result = run_replayer(fixture, port, success=False)
+    assert 'Erro ao normalizar' in result.stderr
+    assert 'linha 5' in result.stderr
+    assert 'antes do erro: 2.' in result.stderr
+    write_rows([other, rows[0], missing])
+    receive(fixture, 6, 2)  # no --limit: end of CSV
+    result = run_replayer(fixture, port, machine=99)
+    assert result.stdout == 'Publicações confirmadas: 0\n'
+    result = run_replayer(root / 'missing.csv', port, success=False)
+    assert 'Erro ao ler' in result.stderr and 'antes do erro: 0.' in result.stderr
+    # CSV accepts these bytes; the JSON module must reject invalid UTF-8 safely.
+    write_rows([rows[0]])
+    fixture.write_bytes(fixture.read_bytes().replace(rows[0]['machine_type'].encode(), b'\xff'))
+    result = run_replayer(fixture, port, success=False)
+    assert 'Erro ao serializar' in result.stderr and 'antes do erro: 0.' in result.stderr
+    print('PASS: CSV → Telemetry → JSON → MQTT, filtros, limites e erros', flush=True)
+
+
+def replayer_publication_failure():
+    # One ACK followed by a dropped connection: no count for the failed row,
+    # no third publication, and no automatic reconnect.
+    with listener() as server:
+        def serve():
+            with server.accept()[0] as conn:
+                conn.settimeout(3)
+                _, body = packet(conn)
+                n = int.from_bytes(body[10:12], 'big')
+                client_id = body[12:12+n].decode()
+                assert client_id.startswith('sim-6-')
+                conn.sendall(b'\x20\x02\x00\x00')
+                header, body = packet(conn)
+                assert header == 0x32
+                n = int.from_bytes(body[:2], 'big')
+                conn.sendall(b'\x40\x02' + body[2+n:4+n])
+                assert packet(conn)[0] == 0x32
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(serve)
+            result = run_replayer('../data/predictive_maintenance_v3.csv',
+                                  server.getsockname()[1], limit=3, success=False)
+            assert 'PUBACK' in result.stderr and 'antes do erro: 1.' in result.stderr
+            future.result(timeout=4)
+        server.settimeout(.1)
+        try:
+            unexpected, _ = server.accept()
+        except socket.timeout:
+            pass
+        else:
+            unexpected.close()
+            raise AssertionError('Unexpected reconnect')
+    print('PASS: falha após PUBACK parcial, sem sucesso nem reconexão', flush=True)
+
+
 def real_broker():
     for command in ('mosquitto', 'mosquitto_sub', 'stdbuf'):
         if not shutil.which(command):
@@ -141,6 +283,7 @@ def real_broker():
                 received = [json.loads(line) for line in (root / 'messages').read_text().splitlines()
                             if line.startswith('{')]
                 assert received == [{'sequence': 1}, {'sequence': 2}], received
+            replayer_cases(root, port)
         finally:
             for process in (subscriber, broker):
                 if process is not None:
@@ -154,8 +297,12 @@ if __name__ == '__main__':
     with socket.socket() as unavailable:
         unavailable.bind(('127.0.0.1', 0))
         run_client(unavailable.getsockname()[1], -1, -1)
+        result = run_replayer('../data/predictive_maintenance_v3.csv',
+                              unavailable.getsockname()[1], success=False)
+        assert 'Erro ao conectar' in result.stderr
     for scenario in ('ack', 'reject', 'silent-connack', 'silent-puback', 'wrong-ack', 'disconnect'):
         controlled_peer(scenario)
         print(f'PASS: {scenario}', flush=True)
+    replayer_publication_failure()
     real_broker()
     print('Todos os testes de integração MQTT passaram.')

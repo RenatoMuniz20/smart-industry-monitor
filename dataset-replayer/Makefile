@@ -13,8 +13,8 @@ MQTT_LDLIBS = $(shell pkg-config --libs libmosquitto)
 
 all: $(TARGET) build/telemetry_json.o build/mqtt_publisher.o
 
-$(TARGET): src/main.c src/csv_reader.c src/telemetry.c include/csv_reader.h include/telemetry.h Makefile | build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ src/main.c src/csv_reader.c src/telemetry.c $(LDLIBS)
+$(TARGET): src/main.c src/csv_reader.c src/telemetry.c build/telemetry_json.o build/mqtt_publisher.o include/csv_reader.h include/telemetry.h include/telemetry_json.h include/mqtt_publisher.h Makefile | build
+	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ src/main.c src/csv_reader.c src/telemetry.c build/telemetry_json.o build/mqtt_publisher.o $(MQTT_LDLIBS) $(LDLIBS)
 
 build/telemetry_json.o: src/telemetry_json.c include/telemetry_json.h include/telemetry.h include/csv_reader.h Makefile | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/telemetry_json.c
@@ -34,7 +34,7 @@ build/mqtt_publisher.o: src/mqtt_publisher.c include/mqtt_publisher.h Makefile |
 $(MQTT_TEST_TARGET): tests/test_mqtt_publisher.c build/mqtt_publisher.o include/mqtt_publisher.h Makefile | build
 	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_mqtt_publisher.c build/mqtt_publisher.o $(MQTT_LDLIBS) $(LDLIBS)
 
-test-mqtt: $(MQTT_TEST_TARGET)
+test-mqtt: $(MQTT_TEST_TARGET) $(TARGET)
 	python3 tests/test_mqtt_integration.py
 
 test: $(MQTT_TEST_TARGET) $(TEST_TARGET) $(TELEMETRY_TEST_TARGET) $(JSON_TEST_TARGET) $(TARGET)

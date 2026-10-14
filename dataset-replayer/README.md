@@ -3,11 +3,11 @@
 Componente em C11 que lê e valida o dataset industrial linha a linha, sem
 carregá-lo inteiro em memória. Na arquitetura do Smart Industry Monitor, é a
 entrada dos dados históricos: nesta etapa, seleciona uma máquina e imprime
-seus registros. MQTT ainda não faz parte deste componente nesta etapa.
+seus registros. Com `--publish`, publica telemetrias JSON no broker MQTT.
 
 ## Requisitos e compilação
 
-Linux, GCC e Make. Execute os comandos abaixo a partir da raiz do repositório:
+Linux, GCC, Make, pkg-config e libmosquitto (no Arch: `sudo pacman -S mosquitto pkgconf`). Execute os comandos abaixo a partir da raiz do repositório:
 
 ```sh
 make -C dataset-replayer
@@ -129,7 +129,7 @@ candidatos estiver instalado; os demais testes continuam normalmente.
 ## Cliente publicador MQTT (SIM-03.2)
 
 O módulo `mqtt_publisher.h` usa libmosquitto, MQTT 3.1.1 e uma conexão
-reutilizável. Ainda não está integrado ao CSV nem à CLI. No Arch Linux:
+reutilizável, integrado à CLI por `--publish`. No Arch Linux:
 
 ```sh
 sudo pacman -S mosquitto pkgconf
@@ -139,8 +139,8 @@ make -C dataset-replayer test
 make -C dataset-replayer test-mqtt
 ```
 
-`all` compila o objeto MQTT. Somente o teste MQTT é vinculado à libmosquitto;
-o executável principal mantém suas dependências anteriores. `make test` inclui
+`all` compila e vincula os módulos JSON e MQTT ao executável principal,
+utilizando libmosquitto via pkg-config. `make test` inclui
 validações locais do módulo e não abre conexões nem exige broker ativo.
 `test-mqtt` requer Python 3 (biblioteca padrão), Mosquitto, `mosquitto_sub` e
 `stdbuf` (GNU coreutils). Inicia e encerra um broker temporário em loopback
@@ -220,10 +220,11 @@ opções podem aparecer em qualquer ordem após o caminho CSV; duplicações,
 valores ausentes e opções MQTT sem `--publish` são rejeitados. Os valores
 numéricos aceitam somente dígitos, sem sinais, espaços ou parte fracionária.
 
-Nesta subetapa, `--publish` apenas valida os argumentos e informa em stderr
-que a publicação ainda não está integrada, incluindo a configuração efetiva.
-Encerra com código 1, sem abrir o CSV, conectar ao broker, publicar ou aguardar
-intervalos. Exemplo com os valores padrão:
+Com `--publish`, os argumentos são validados antes de conectar uma única vez
+ao broker. O Client ID combina machine ID e PID (`sim-<machine_id>-<pid>`).
+Após CONNACK aceito, o CSV é processado em streaming: filtro por máquina,
+normalização, serialização JSON e publicação pela conexão existente, no tópico
+`smart-industry/machines/{machine_id}/telemetry`. Exemplo com os valores padrão:
 
 ```sh
 dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --limit 5 --publish
@@ -233,3 +234,35 @@ Sem `--publish`, a execução original permanece disponível. O reconhecimento
 sintático de um host não verifica sua resolução nem sua disponibilidade.
 Os testes desses parâmetros fazem parte de `make -C dataset-replayer test`
 e não exigem broker.
+
+## Integração do Replayer (SIM-03.3.2)
+
+Inicie o broker de desenvolvimento em outro terminal, se necessário:
+
+```sh
+mosquitto -c config/mosquitto/mosquitto.conf -v
+```
+
+Cada publicação usa QoS 1 e retain desabilitado. O contador avança apenas
+quando `mqtt_publisher_publish` retorna sucesso após o PUBACK correspondente.
+`--limit` limita essas confirmações; registros de outras máquinas não contam.
+Ao completar o CSV ou atingir o limite, a conexão é encerrada e stdout exibe
+`Publicações confirmadas: N`. Sem registros selecionados, N é zero.
+
+Erros de CSV, normalização, JSON ou MQTT interrompem o processamento. O
+callback propaga falhas ao leitor CSV, que identifica a linha. O contexto MQTT
+é fechado também nesses caminhos; stderr informa o erro e a contagem parcial,
+sem resumo de sucesso em stdout, e o processo retorna 1. Uma falha no fechamento
+também retorna erro. Não há reconexão nem repetição automática. Um timeout
+sem PUBACK não permite concluir que o broker não recebeu a mensagem.
+
+**Limitação temporária:** `--interval-ms` permanece reconhecido e validado,
+mas não aplica espera nesta subetapa. A temporização pertence à SIM-03.3.3.
+Permanece também a limitação DNS/TCP síncrona documentada no módulo MQTT.
+
+`make test` verifica o modo tradicional e argumentos inválidos sem broker.
+`make test-mqtt` mantém os testes do módulo e acrescenta o executável real
+com dataset, seleção por máquina, múltiplos registros, limite, tópico e JSON
+recebidos, `power: null`, campos ausentes, zero registros, falhas de CSV/JSON/
+normalização, broker indisponível e erro após uma confirmação parcial.
+Os testes usam broker temporário em loopback e não verificam intervalos.

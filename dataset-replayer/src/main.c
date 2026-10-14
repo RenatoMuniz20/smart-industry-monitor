@@ -5,14 +5,18 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "csv_reader.h"
 #include "telemetry.h"
+#include "telemetry_json.h"
+#include "mqtt_publisher.h"
 
 typedef struct {
     int machine_id;
     size_t limit; /* Zero means unlimited. */
     size_t selected;
+    MqttPublisher *publisher;
 } ReplayerContext;
 
 static int parse_positive(const char *text, uintmax_t maximum, uintmax_t *value)
@@ -69,7 +73,23 @@ static int select_row(const DatasetRow *row, void *context)
         return 0;
     }
     if (telemetry_normalize(row, &telemetry) != 0) {
+        if (state->publisher != NULL) {
+            fprintf(stderr, "Erro ao normalizar telemetria.\n");
+        }
         return -1;
+    }
+    if (state->publisher != NULL) {
+        char json[2048];
+        if (telemetry_to_json(&telemetry, json, sizeof json) != 0) {
+            fprintf(stderr, "Erro ao serializar telemetria JSON.\n");
+            return -1;
+        }
+        if (mqtt_publisher_publish(state->publisher, telemetry.machine_id, json) != 0) {
+            fprintf(stderr, "Erro na publicação MQTT ou na confirmação PUBACK.\n");
+            return -1;
+        }
+        ++state->selected; /* mqtt_publisher_publish waits for matching PUBACK. */
+        return state->limit != 0 && state->selected >= state->limit ? 1 : 0;
     }
     format_double(temperature, sizeof temperature, telemetry.temperature);
     format_double(current, sizeof current, telemetry.current);
@@ -155,11 +175,21 @@ int main(int argc, char *argv[])
         goto usage;
     }
     if (publish) {
-        fprintf(stderr, "Modo --publish reservado para a próxima subetapa; "
-                "publicação MQTT ainda não integrada "
-                "(host=%s port=%d interval_ms=%d).\n",
-                mqtt_host, mqtt_port, interval_ms);
-        return 1;
+        char client_id[64];
+        int length = snprintf(client_id, sizeof client_id, "sim-%d-%jd",
+                              context.machine_id, (intmax_t)getpid());
+        if (length < 0 || (size_t)length >= sizeof client_id) {
+            fprintf(stderr, "Erro ao gerar Client ID MQTT.\n");
+            return 1;
+        }
+        /* Validated for SIM-03.3.3; no pacing in this substep. */
+        (void)interval_ms;
+        if (mqtt_publisher_connect(&context.publisher, mqtt_host, mqtt_port,
+                                   client_id, 5000) != 0) {
+            fprintf(stderr, "Erro ao conectar ao broker MQTT %s:%d.\n",
+                    mqtt_host, mqtt_port);
+            return 1;
+        }
     }
     if (csv_read_file(argv[1], &row_count, &error_line, select_row, &context) != 0) {
         if (error_line != 0) {
@@ -167,7 +197,23 @@ int main(int argc, char *argv[])
         } else {
             fprintf(stderr, "Erro ao ler o arquivo CSV: %s\n", argv[1]);
         }
+        if (publish) {
+            if (mqtt_publisher_close(&context.publisher) != 0) {
+                fprintf(stderr, "Erro ao encerrar conexão MQTT.\n");
+            }
+            fprintf(stderr, "Execução interrompida; publicações confirmadas antes do erro: %zu.\n",
+                    context.selected);
+        }
         return 1;
+    }
+    if (publish) {
+        if (mqtt_publisher_close(&context.publisher) != 0) {
+            fprintf(stderr, "Erro ao encerrar conexão MQTT; publicações confirmadas: %zu.\n",
+                    context.selected);
+            return 1;
+        }
+        printf("Publicações confirmadas: %zu\n", context.selected);
+        return 0;
     }
     if (context.selected == 0) {
         printf("Nenhum registro encontrado para machine_id %d.\n", context.machine_id);
