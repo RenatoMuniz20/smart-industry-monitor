@@ -75,3 +75,53 @@ interrompe a leitura e informa a linha do CSV, sem contar o registro inválido.
 O processamento continua em streaming. `make test` executa os testes do leitor,
 da normalização e da CLI; estes últimos usam ferramentas padrão do Linux e
 arquivos temporários removidos ao final.
+
+## Serialização JSON de telemetria (SIM-03.1)
+
+O módulo independente `telemetry_json.h` converte uma `Telemetry` para JSON,
+sem alterar a estrutura, a leitura CSV, a normalização ou a CLI atual. Não
+publica mensagens MQTT e não realiza operações de rede ou entrada e saída.
+
+```c
+int telemetry_to_json(const Telemetry *telemetry, char *buffer, size_t capacity);
+```
+
+O chamador fornece o buffer e sua capacidade, incluindo o terminador `\0`.
+O retorno é 0 em sucesso ou -1 para argumentos inválidos, buffer insuficiente,
+textos inválidos, indicador de falha diferente de 0/1 ou erro de formatação/locale.
+O buffer inteiro permanece inalterado em erro. Os arrays textuais devem conter
+terminador dentro de seus 64 bytes e UTF-8 válido. Aspas, barras invertidas e
+caracteres de controle são escapados; UTF-8 válido é preservado.
+
+Exemplo de saída (exatamente oito propriedades):
+
+```json
+{"machine_id":6,"machine_type":"Robotic Arm","timestamp":"2024-01-01 00:21:00","temperature":49.5,"current":3.5,"power":null,"state":"NORMAL","failure_within_24h":1}
+```
+
+Os três campos `double` são números ou `null`: `NAN` e ambos os infinitos viram
+`null`, sem omitir propriedades. `power` normalmente é `null`, conforme a
+normalização. O timestamp permanece intacto, sem presumir fuso horário.
+Estados são `UNKNOWN`, `IDLE`, `NORMAL` ou `PEAK`; enumerações não reconhecidas
+seguem a convenção atual da CLI e viram `UNKNOWN`. O indicador preditivo
+`failure_within_24h` permanece um número inteiro 0 ou 1.
+
+A formatação usa `DBL_DECIMAL_DIG`, podendo exibir mais casas que a CLI para
+preservar o valor do `double`. Um locale numérico POSIX `C` é aplicado apenas
+à thread durante a formatação e o anterior é restaurado; o locale global não
+é alterado. Não há dependência externa de JSON. O alvo continua sendo Linux,
+com biblioteca C que ofereça `newlocale`, `uselocale` e `freelocale`.
+
+O JSON é montado em buffer temporário de 2.048 bytes antes de copiar para o
+destino. Cada texto de até 63 bytes expande para no máximo 378 bytes mais duas
+aspas; os dois textos, as chaves, pontuação, estados, inteiros e três números
+em notação científica cabem nesse limite no alvo Linux. Os limites e retornos
+de formatação também são verificados. Os buffers auxiliares de texto são
+dimensionados para essa expansão; não há alocação dinâmica explícita no módulo,
+embora a biblioteca C possa alocar internamente ao criar o locale.
+
+`make -C dataset-replayer all` também compila o objeto do serializador.
+Execute `make -C dataset-replayer test` a partir da raiz para rodar os testes
+existentes e `test_telemetry_json`, incluindo a integração da normalização com
+o JSON. O teste de locale alternativo informa `SKIP` se nenhum dos locales
+candidatos estiver instalado; os demais testes continuam normalmente.
