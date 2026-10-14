@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "csv_reader.h"
+#include "telemetry.h"
 
 typedef struct {
     int machine_id;
@@ -42,20 +43,42 @@ static void format_double(char *buffer, size_t capacity, double value)
     }
 }
 
+static const char *format_state(TelemetryState state)
+{
+    switch (state) {
+    case TELEMETRY_STATE_IDLE:
+        return "IDLE";
+    case TELEMETRY_STATE_NORMAL:
+        return "NORMAL";
+    case TELEMETRY_STATE_PEAK:
+        return "PEAK";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static int select_row(const DatasetRow *row, void *context)
 {
     ReplayerContext *state = context;
+    Telemetry telemetry;
     char temperature[64];
     char current[64];
+    char power[64];
 
     if (row->machine_id != state->machine_id) {
         return 0;
     }
-    format_double(temperature, sizeof temperature, row->temperature_motor);
-    format_double(current, sizeof current, row->current_phase_avg);
-    if (printf("timestamp=%s machine_id=%d type=%s temperature=%s current=%s mode=%s\n",
-               row->timestamp, row->machine_id, row->machine_type,
-               temperature, current, row->operating_mode) < 0) {
+    if (telemetry_normalize(row, &telemetry) != 0) {
+        return -1;
+    }
+    format_double(temperature, sizeof temperature, telemetry.temperature);
+    format_double(current, sizeof current, telemetry.current);
+    format_double(power, sizeof power, telemetry.power);
+    if (printf("timestamp=%s machine_id=%d machine_type=%s temperature=%s current=%s "
+               "power=%s state=%s failure_within_24h=%d\n",
+               telemetry.timestamp, telemetry.machine_id, telemetry.machine_type,
+               temperature, current, power, format_state(telemetry.state),
+               telemetry.failure_within_24h) < 0) {
         return -1;
     }
     ++state->selected;

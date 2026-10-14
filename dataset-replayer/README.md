@@ -45,3 +45,33 @@ opcional para processar cada registro válido.
 
 Campos `double` vazios são representados por `NAN`. Na saída, `N/A` indica um
 valor ausente, não zero. Campos inteiros vazios ou inválidos causam erro.
+
+## Normalização de telemetria
+
+O módulo independente `telemetry.h` oferece
+`int telemetry_normalize(const DatasetRow *row, Telemetry *out)`, chamado pelo
+`main.c` após o filtro por máquina. `Telemetry` contém `machine_id`, `machine_type`,
+`timestamp`, `temperature`, `current`, `power`, `state` e `failure_within_24h`.
+Os textos são copiados para arrays próprios de 64 bytes; o timestamp é
+preservado sem conversão ou adição de fuso horário.
+
+`temperature_motor` vira `temperature` e `current_phase_avg` vira `current`,
+preservando valores e `NAN`, sem conversão de unidades. `power` é sempre `NAN`,
+pois o dataset não fornece potência diretamente. Os modos exatos `idle`,
+`normal` e `peak` viram `TELEMETRY_STATE_IDLE`, `TELEMETRY_STATE_NORMAL` e
+`TELEMETRY_STATE_PEAK`; qualquer outro texto, inclusive vazio, vira
+`TELEMETRY_STATE_UNKNOWN` (valor zero).
+
+`failure_within_24h` aceita apenas 0 ou 1 e mantém seu significado preditivo,
+sem indicar falha operacional atual nem alterar o estado. A função retorna
+0 em sucesso ou -1 para argumentos nulos ou indicador inválido, preservando
+integralmente a saída em erro. Não realiza alocação dinâmica ou operações de
+entrada e saída.
+
+A CLI exibe todos esses campos, com estados `UNKNOWN`, `IDLE`, `NORMAL` ou
+`PEAK` e valores ausentes como `N/A`. `--limit` conta apenas registros
+selecionados, normalizados e exibidos com sucesso. Um erro de normalização
+interrompe a leitura e informa a linha do CSV, sem contar o registro inválido.
+O processamento continua em streaming. `make test` executa os testes do leitor,
+da normalização e da CLI; estes últimos usam ferramentas padrão do Linux e
+arquivos temporários removidos ao final.
