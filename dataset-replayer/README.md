@@ -256,13 +256,47 @@ sem resumo de sucesso em stdout, e o processo retorna 1. Uma falha no fechamento
 também retorna erro. Não há reconexão nem repetição automática. Um timeout
 sem PUBACK não permite concluir que o broker não recebeu a mensagem.
 
-**Limitação temporária:** `--interval-ms` permanece reconhecido e validado,
-mas não aplica espera nesta subetapa. A temporização pertence à SIM-03.3.3.
-Permanece também a limitação DNS/TCP síncrona documentada no módulo MQTT.
+Permanece a limitação DNS/TCP síncrona documentada no módulo MQTT.
 
 `make test` verifica o modo tradicional e argumentos inválidos sem broker.
 `make test-mqtt` mantém os testes do módulo e acrescenta o executável real
 com dataset, seleção por máquina, múltiplos registros, limite, tópico e JSON
 recebidos, `power: null`, campos ausentes, zero registros, falhas de CSV/JSON/
 normalização, broker indisponível e erro após uma confirmação parcial.
-Os testes usam broker temporário em loopback e não verificam intervalos.
+Os testes usam broker temporário em loopback e pares MQTT controlados.
+
+
+## Reprodução temporal (SIM-03.3.3)
+
+No modo `--publish`, `--interval-ms` configura a espera entre publicações
+(padrão 1000 ms, valores de 1 a 60000 ms). A primeira mensagem é publicada
+assim que estiver pronta. Para cada mensagem seguinte da máquina selecionada,
+a CLI normaliza e serializa o registro, aguarda o intervalo e publica usando
+a mesma conexão. A espera acontece depois do PUBACK anterior; não há
+compensação do tempo gasto com leitura, processamento ou rede.
+
+A espera usa `nanosleep` POSIX, retomando o tempo restante quando interrompida
+por `EINTR`. Outros erros interrompem a leitura, fecham o contexto MQTT e não
+contabilizam a mensagem ainda não publicada. Não há espera após a última
+publicação, seja por `--limit` ou fim do CSV, nem para registros filtrados.
+O modo tradicional não executa esperas. Ordem e timestamps originais são
+preservados; os intervalos históricos do CSV não são reproduzidos.
+
+```sh
+# Três mensagens, duas esperas de 100 ms
+dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --publish --limit 3 --interval-ms 100
+
+# Uma mensagem imediata, mesmo com intervalo de 60 segundos
+dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --publish --limit 1 --interval-ms 60000
+```
+
+Não há garantia de tempo real: o escalonamento pode prolongar as esperas.
+Durante `nanosleep` não há processamento de eventos MQTT; permanece a
+limitação de keepalive descrita no módulo, especialmente com intervalos
+próximos de 60 segundos e atrasos adicionais. Não há reconexão automática.
+
+`make test-mqtt` também verifica cadência com relógio monotônico, tolerância
+inferior e sem limites superiores apertados. Um executável exclusivo de teste
+usa o linker GNU para observar chamadas de `nanosleep`, verificar ausência de
+pausas iniciais/finais, contar duas esperas para três mensagens e injetar
+`EINTR` e erro. Esse wrapper não integra o executável de produção.

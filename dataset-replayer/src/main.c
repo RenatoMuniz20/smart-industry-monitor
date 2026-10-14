@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -6,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "csv_reader.h"
 #include "telemetry.h"
@@ -17,6 +19,7 @@ typedef struct {
     size_t limit; /* Zero means unlimited. */
     size_t selected;
     MqttPublisher *publisher;
+    int interval_ms;
 } ReplayerContext;
 
 static int parse_positive(const char *text, uintmax_t maximum, uintmax_t *value)
@@ -35,6 +38,21 @@ static int parse_positive(const char *text, uintmax_t maximum, uintmax_t *value)
         return -1;
     }
     *value = parsed;
+    return 0;
+}
+
+static int wait_interval(int interval_ms)
+{
+    struct timespec remaining = {
+        .tv_sec = interval_ms / 1000,
+        .tv_nsec = (interval_ms % 1000) * 1000000L
+    };
+
+    while (nanosleep(&remaining, &remaining) != 0) {
+        if (errno != EINTR) {
+            return -1;
+        }
+    }
     return 0;
 }
 
@@ -82,6 +100,13 @@ static int select_row(const DatasetRow *row, void *context)
         char json[2048];
         if (telemetry_to_json(&telemetry, json, sizeof json) != 0) {
             fprintf(stderr, "Erro ao serializar telemetria JSON.\n");
+            return -1;
+        }
+        /* Sleep only when there is another selected, serializable record.
+         * selected counts PUBACKs, so the first publication never waits.
+         */
+        if (state->selected != 0 && wait_interval(state->interval_ms) != 0) {
+            fprintf(stderr, "Erro ao aguardar intervalo entre publicações.\n");
             return -1;
         }
         if (mqtt_publisher_publish(state->publisher, telemetry.machine_id, json) != 0) {
@@ -182,8 +207,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Erro ao gerar Client ID MQTT.\n");
             return 1;
         }
-        /* Validated for SIM-03.3.3; no pacing in this substep. */
-        (void)interval_ms;
+        context.interval_ms = interval_ms;
         if (mqtt_publisher_connect(&context.publisher, mqtt_host, mqtt_port,
                                    client_id, 5000) != 0) {
             fprintf(stderr, "Erro ao conectar ao broker MQTT %s:%d.\n",

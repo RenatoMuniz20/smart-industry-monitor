@@ -34,7 +34,10 @@ build/mqtt_publisher.o: src/mqtt_publisher.c include/mqtt_publisher.h Makefile |
 $(MQTT_TEST_TARGET): tests/test_mqtt_publisher.c build/mqtt_publisher.o include/mqtt_publisher.h Makefile | build
 	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_mqtt_publisher.c build/mqtt_publisher.o $(MQTT_LDLIBS) $(LDLIBS)
 
-test-mqtt: $(MQTT_TEST_TARGET) $(TARGET)
+build/test_replayer_timing: src/main.c src/csv_reader.c src/telemetry.c tests/wrap_nanosleep.c build/telemetry_json.o build/mqtt_publisher.o include/csv_reader.h include/telemetry.h include/telemetry_json.h include/mqtt_publisher.h Makefile | build
+	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -Wl,--wrap=nanosleep -o $@ src/main.c src/csv_reader.c src/telemetry.c tests/wrap_nanosleep.c build/telemetry_json.o build/mqtt_publisher.o $(MQTT_LDLIBS) $(LDLIBS)
+
+test-mqtt: $(MQTT_TEST_TARGET) $(TARGET) build/test_replayer_timing
 	python3 tests/test_mqtt_integration.py
 
 test: $(MQTT_TEST_TARGET) $(TEST_TARGET) $(TELEMETRY_TEST_TARGET) $(JSON_TEST_TARGET) $(TARGET)

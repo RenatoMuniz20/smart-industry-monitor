@@ -3,6 +3,7 @@
 import concurrent.futures
 import csv
 import json
+import os
 from pathlib import Path
 import shutil
 import socket
@@ -98,13 +99,14 @@ def controlled_peer(mode):
             future.result(timeout=4)
 
 
-def run_replayer(path, port, machine=6, limit=None, success=True, extra=()):
-    command = ['./build/dataset-replayer', str(path), '--publish',
+def run_replayer(path, port, machine=6, limit=None, success=True, extra=(),
+                 executable='./build/dataset-replayer', env=None):
+    command = [executable, str(path), '--publish',
                '--machine-id', str(machine), '--mqtt-host', '127.0.0.1',
                '--mqtt-port', str(port), *extra]
     if limit is not None:
         command += ['--limit', str(limit)]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=8)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=20, env=env)
     assert (result.returncode == 0) == success, result
     if not success:
         assert result.stdout == '', result
@@ -162,7 +164,7 @@ def replayer_cases(root, port):
                     sub.terminate()
                 sub.wait(timeout=5)
 
-    # Real dataset end-to-end, including an explicit interval accepted but unused.
+    # A single publication never waits, even with the largest interval.
     received = receive(dataset, 6, 1, 1, ('--interval-ms', '60000'))
     assert received[0]['timestamp'] == rows[0]['timestamp']
     assert received[0]['machine_type'] == rows[0]['machine_type']
@@ -239,6 +241,88 @@ def replayer_publication_failure():
     print('PASS: falha após PUBACK parcial, sem sucesso nem reconexão', flush=True)
 
 
+def replayer_timing():
+    with tempfile.TemporaryDirectory(prefix='sim-timing-') as directory:
+        path = Path(directory) / 'timing.csv'
+        with Path('../data/predictive_maintenance_v3.csv').open(newline='') as source:
+            reader = csv.DictReader(source)
+            fields = reader.fieldnames
+            rows = []
+            for row in reader:
+                if row['machine_id'] == '6':
+                    rows.append(row)
+                    if len(rows) == 3:
+                        break
+        # Interleaved and trailing records must not add sleeps.
+        other = dict(rows[0], machine_id='7')
+        with path.open('w', newline='') as target:
+            writer = csv.DictWriter(target, fieldnames=fields, lineterminator='\n')
+            writer.writeheader()
+            writer.writerows([other, rows[0], other, rows[1], other, rows[2], other])
+
+        for interval, count, mode, limit in (
+                (60000, 1, None, 1), (100, 3, None, 3),
+                (None, 3, None, None), (100, 3, 'eintr', 3),
+                (100, 1, 'fail', 3)):
+            with listener() as server:
+                def serve():
+                    with server.accept()[0] as conn:
+                        conn.settimeout(15)  # generous deadlock guard, not a cadence assertion
+                        assert packet(conn)[0] == 0x10
+                        conn.sendall(b'\x20\x02\x00\x00')
+                        last_ack = None
+                        for i in range(count):
+                            header, body = packet(conn)
+                            arrival = time.monotonic()
+                            assert header == 0x32  # QoS 1, retain false
+                            n = int.from_bytes(body[:2], 'big')
+                            assert body[2:2+n] == b'smart-industry/machines/6/telemetry'
+                            payload = json.loads(body[4+n:])
+                            assert payload['timestamp'] == rows[i]['timestamp']
+                            if last_ack is not None:
+                                seconds = (1000 if interval is None else interval) / 1000
+                                assert arrival - last_ack >= seconds * .9
+                            # Delayed PUBACK ensures pacing starts after confirmation.
+                            if i == 0 and count > 1:
+                                time.sleep(.15)
+                            last_ack = time.monotonic()
+                            conn.sendall(b'\x40\x02' + body[2+n:4+n])
+                        assert packet(conn) == (0xe0, b'')  # no extra publication
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(serve)
+                    env = dict(os.environ)
+                    env.pop('SIM_TEST_SLEEP', None)
+                    if mode:
+                        env['SIM_TEST_SLEEP'] = mode
+                    extra = () if interval is None else ('--interval-ms', str(interval))
+                    result = run_replayer(path, server.getsockname()[1], limit=limit,
+                                          success=mode != 'fail', extra=extra,
+                                          executable='./build/test_replayer_timing', env=env)
+                    future.result(timeout=15)
+                calls = [line for line in result.stderr.splitlines()
+                         if line.startswith('TEST nanosleep ')]
+                expected = 1 if mode == 'fail' else count - 1 + (mode == 'eintr')
+                assert len(calls) == expected, (calls, expected)
+                if mode == 'fail':
+                    assert 'Erro ao aguardar intervalo' in result.stderr
+                    assert 'antes do erro: 1.' in result.stderr
+                else:
+                    assert result.stdout == f'Publicações confirmadas: {count}\n'
+                    assert len(result.stderr.splitlines()) == len(calls)
+                if interval is None:
+                    assert calls == ['TEST nanosleep 1 0'] * 2
+                if interval == 100:
+                    assert calls == ['TEST nanosleep 0 100000000'] * expected
+                print(f'PASS: temporização intervalo={interval}, modo={mode}, esperas={len(calls)}',
+                      flush=True)
+
+        # Instrument the traditional path too: no nanosleep calls at all.
+        result = subprocess.run(['./build/test_replayer_timing', str(path),
+                                 '--machine-id', '6'], capture_output=True, text=True, timeout=20)
+        assert result.returncode == 0 and result.stderr == ''
+        assert result.stdout.endswith('Registros selecionados: 3\n')
+
+
 def real_broker():
     for command in ('mosquitto', 'mosquitto_sub', 'stdbuf'):
         if not shutil.which(command):
@@ -304,5 +388,6 @@ if __name__ == '__main__':
         controlled_peer(scenario)
         print(f'PASS: {scenario}', flush=True)
     replayer_publication_failure()
+    replayer_timing()
     real_broker()
     print('Todos os testes de integração MQTT passaram.')
