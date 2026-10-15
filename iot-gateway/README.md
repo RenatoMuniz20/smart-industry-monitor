@@ -1,13 +1,14 @@
-# IoT Gateway — SIM-04.1
+# IoT Gateway — SIM-04.1 e SIM-04.2
 
 Módulo C11 independente para interpretar e validar tópico e telemetria JSON.
-Nesta etapa, `all` gera somente um objeto compilado: não existe executável do
-Gateway, assinatura MQTT, CLI, HTTP ou integração com InterSCity. O Dataset
-Replayer não é modificado nem utilizado como dependência de compilação.
+O validador JSON (SIM-04.1) e o assinante MQTT (SIM-04.2) são módulos separados.
+`all` compila os dois objetos; ainda não existe executável definitivo, CLI,
+integração entre recebimento e validação, HTTP ou InterSCity. O Dataset Replayer
+não é modificado nem utilizado como dependência de compilação.
 
 ## Build e testes locais
 
-Requer GCC, Make, pkg-config e json-c 0.19. Na raiz do repositório:
+Requer GCC, Make, pkg-config, json-c 0.19 e libmosquitto 2.1.2. Na raiz do repositório:
 
 ```sh
 pkg-config --modversion json-c
@@ -17,7 +18,9 @@ make -C iot-gateway clean
 ```
 
 O Makefile usa `-std=c11 -Wall -Wextra -Wpedantic`, obtém flags com pkg-config
-e vincula apenas json-c no teste. Não requer libmosquitto nem broker.
+e vincula cada teste apenas à biblioteca necessária (json-c ou libmosquitto).
+`make test` não abre conexões nem exige broker. O módulo de validação permanece
+independente de MQTT.
 
 ## Interface
 
@@ -106,4 +109,94 @@ O limite de profundidade do tokener é o padrão da biblioteca (32). Não há li
 menor de payload além de `INT_MAX`; objetos grandes podem consumir memória antes
 de serem rejeitados pelo contrato. Alocação insuficiente é tratada como erro,
 mas não há teste de injeção de falha de alocação nesta etapa. O módulo não faz
-nenhuma comunicação ou confirmação MQTT: isso pertence às próximas subetapas.
+nenhuma comunicação ou confirmação MQTT: o assinante abaixo é independente.
+
+
+## Assinante MQTT (SIM-04.2)
+
+```c
+typedef struct MqttSubscriber MqttSubscriber;
+typedef void (*MqttMessageHandler)(const char *topic, const void *payload,
+                                   size_t payload_length, void *context);
+int mqtt_subscriber_connect(MqttSubscriber **out, const char *host, int port,
+                            const char *client_id, int timeout_ms,
+                            MqttMessageHandler handler, void *context);
+int mqtt_subscriber_poll(MqttSubscriber *subscriber, int timeout_ms);
+int mqtt_subscriber_close(MqttSubscriber **subscriber);
+MqttSubscriberError mqtt_subscriber_last_error(void);
+const char *mqtt_subscriber_error_string(MqttSubscriberError error);
+```
+
+As três operações retornam 0 em sucesso e -1 em erro, sem imprimir logs.
+O enum e seu texto permitem consultar o diagnóstico da última operação,
+inclusive quando uma tentativa de conexão já liberou o contexto. Consulte-o
+antes de chamar outra operação. O diagnóstico é local ao processo e não é
+thread-safe; não armazena uma lista de falhas anteriores.
+
+Inicialize `MqttSubscriber *subscriber = NULL` e passe seu endereço a `connect`.
+`host`, porta (1..65535), client ID não vazio e callback são obrigatórios;
+`context` pode ser NULL. O chamador deve fornecer um client ID único no broker.
+O módulo admite um contexto ativo por processo e controla a inicialização e
+finalização da libmosquitto; não deve compartilhar o processo com outros
+usuários independentes da biblioteca. Uso sequencial, sem reentrância: não
+chame `connect`, `poll` ou `close` de dentro do callback.
+
+A conexão usa MQTT 3.1.1 explicitamente, sessão limpa e filtro fixo
+`smart-industry/machines/+/telemetry`, com QoS solicitado 1. O retorno de
+sucesso exige CONNACK aceito, envio de SUBSCRIBE, SUBACK com MID correspondente,
+uma única concessão e QoS exatamente 1. Recusa, QoS 0/2/128, MID divergente,
+erro de rede ou timeout retornam erro e liberam o contexto parcial, mantendo
+`*out == NULL`. Uma nova tentativa explícita é permitida após a falha.
+
+O timeout de conexão aceita 1..5000 ms, compartilhado pelas esperas CONNACK e
+SUBACK e medido com relógio monotônico. O loop síncrono usa esperas de até
+100 ms. **Limitação:** `mosquitto_connect` faz preparação DNS/TCP síncrona;
+o prazo começa antes dela, mas não pode interrompê-la, podendo ultrapassar
+cinco segundos. Não são usados threads, sinais globais ou protocolo manual.
+
+Após conectar, o chamador executa `poll` regularmente. Cada chamada faz uma
+iteração de `mosquitto_loop`, com timeout 0..5000 ms (0 é não bloqueante).
+Ausência de mensagem retorna 0. Erro de rede/desconexão invalida o contexto,
+e chamadas posteriores continuam retornando erro até `close`; não há
+reconexão automática. O timeout limita a espera da biblioteca, não a duração
+de um callback do usuário. A aplicação deve manter o processamento frequente
+para atender ao keepalive de 60 s.
+
+O callback recebe bytes sem presumir NUL, inclusive payload vazio ou binário,
+com tópico e comprimento preservados. Esses ponteiros são emprestados e
+expiram ao retornar do callback: copie os dados se precisar retê-los. O
+callback também pode ocorrer durante `connect`, após SUBSCRIBE e antes de
+seu retorno, se o broker enviar dados antes do SUBACK. O assinante não
+interpreta JSON, não chama o validador e não cria logs finais de aplicação.
+QoS 1 admite duplicações e não significa validação/processamento da mensagem.
+
+`close` aceita ponteiro nulo, tenta enviar DISCONNECT quando saudável, destrói
+o cliente, libera recursos da biblioteca e zera o ponteiro do chamador,
+inclusive em erro. Não aguarda resposta ao DISCONNECT. Não use aliases do
+ponteiro após liberar. Não há TLS, autenticação, persistência ou deduplicação.
+
+### Testes de comunicação
+
+```sh
+make -C iot-gateway clean
+make -C iot-gateway all
+make -C iot-gateway test
+make -C iot-gateway test-mqtt
+```
+
+O último alvo requer Python 3, `mosquitto` e `mosquitto_pub`; usa broker
+temporário em loopback com porta dinâmica, acesso anônimo e sem persistência.
+Não exige broker previamente ativo nem utiliza os dez produtores. O auxiliar
+C informa READY somente após CONNACK e SUBACK, antes de o harness publicar.
+Verifica três mensagens, tópicos e bytes/comprimentos exatos, payload vazio,
+NUL/byte não UTF-8, polling sem mensagens, desconexão, fechamento e reabertura.
+Payload não JSON é intencional: validação pertence à SIM-04.3.
+
+Pares TCP mínimos de teste verificam CONNACK recusado, ausência de CONNACK ou
+SUBACK, MID incorreto, concessões QoS 0/2/128 e quantidade incorreta de concessões.
+Não são um broker completo; apenas injetam respostas de handshake. As threads
+Python são restritas ao harness: o módulo C usa somente loop síncrono. Processos,
+sockets e arquivos temporários são encerrados mesmo em falha. Testes locais
+continuam separados e não exigem rede. Falhas de alocação/relógio e perda de
+rede durante o próprio envio de SUBSCRIBE não têm injeção específica nesta
+etapa; os caminhos correspondentes possuem tratamento de erro no módulo.
