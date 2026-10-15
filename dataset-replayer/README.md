@@ -367,3 +367,6 @@ simultâneos, IDs, tipos e tópicos, três mensagens por máquina, intervalo,
 encerramento normal, SIGINT/SIGTERM, falha de um filho e broker indisponível.
 Os testes conferem que os PIDs dos filhos não existem após o encerramento.
 Permanecem as limitações de timeout DNS/TCP e keepalive descritas anteriormente.
+
+As evidências, resultados efetivos e limitações da validação integrada estão
+em [SIM-03 — Validação final da publicação MQTT](../docs/sim-03-validacao.md).
