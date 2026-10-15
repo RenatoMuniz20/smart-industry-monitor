@@ -9,7 +9,7 @@ MQTT_TEST_TARGET = build/test_mqtt_subscriber
 TARGET = build/gateway_telemetry.o
 TEST_TARGET = build/test_gateway_telemetry
 
-.PHONY: all test test-mqtt clean
+.PHONY: all test test-mqtt test-e2e clean
 
 all: build/iot-gateway
 
@@ -31,6 +31,10 @@ $(MQTT_TEST_TARGET): tests/test_mqtt_subscriber.c build/mqtt_subscriber.o includ
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
 	python3 -B tests/test_cli.py --mqtt
+
+test-e2e: build/iot-gateway
+	$(MAKE) -C ../dataset-replayer all
+	python3 -B tests/test_end_to_end.py
 
 test: $(TEST_TARGET) $(MQTT_TEST_TARGET) build/iot-gateway
 	./$(TEST_TARGET)

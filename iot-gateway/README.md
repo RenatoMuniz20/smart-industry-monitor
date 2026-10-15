@@ -282,4 +282,23 @@ As limitações de chaves repetidas, tamanho e demais módulos continuam válida
 `tests/test_cli.py --mqtt`, com broker temporário reutilizando auxiliares da
 SIM-04.2. Cobre conexão, sequência válida/inválida/válida, null/zero, escaping,
 broker indisponível, falha de comunicação, SIGINT/SIGTERM e coleta do processo.
-Não exige os dez produtores; essa validação pertence à SIM-04.4.
+Esse alvo não exige os dez produtores; a validação completa está no alvo separado abaixo.
+
+
+## Validação com dez produtores (SIM-04.4)
+
+```sh
+make -C iot-gateway test-e2e
+```
+
+O alvo compila os executáveis necessários e usa o launcher existente com
+`LIMIT=3 INTERVAL_MS=1000`, host loopback e porta dinâmica de um Mosquitto
+temporário. Aguarda a prontidão do Gateway, verifica dez processos simultâneos,
+30 publicações confirmadas e pelo menos três mensagens válidas por ID,
+comparando os oito campos às amostras do CSV e permitindo duplicações QoS 1.
+Também injeta válida/`{}`/válida e encerra por SIGTERM após observar os logs.
+Requer Linux (`/proc`), Bash 5.1+, Python 3, Mosquitto e `mosquitto_pub`, além
+das dependências já descritas. Não altera nem encerra brokers externos.
+
+Procedimento manual, resultados efetivamente observados, regressões e
+limitações: [SIM-04 — Validação integrada](../docs/sim-04-validacao.md).
