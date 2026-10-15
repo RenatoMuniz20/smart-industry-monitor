@@ -82,4 +82,38 @@ expect_error "$test_dir/missing.csv" --machine-id 1
 expect_error tests/fixtures/invalid-header.csv --machine-id 1
 expect_error tests/fixtures/invalid-row.csv --machine-id 1
 
+expect_usage()
+{
+    expect_error "$@"
+    test ! -s "$test_dir/actual"
+    # Invalid publication arguments must be rejected before any connection.
+    grep '^Uso:' "$test_dir/error" > /dev/null
+}
+
+expect_usage "$test_dir/input.csv" --publish
+expect_usage "$test_dir/input.csv" --publish --limit 1
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --publish
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish true
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --unknown 1
+for option in --mqtt-port --interval-ms; do
+    for value in 0 -1 +1 1.5 1x abc '' ' 1' 999999999999999999999999999999999999; do
+        expect_usage "$test_dir/input.csv" --machine-id 1 --publish "$option" "$value"
+    done
+    expect_usage "$test_dir/input.csv" --machine-id 1 --publish "$option"
+    expect_usage "$test_dir/input.csv" --machine-id 1 "$option" 1
+    expect_usage "$test_dir/input.csv" --machine-id 1 --publish "$option" 1 "$option" 2
+    expect_usage "$test_dir/input.csv" --machine-id 1 "$option" --publish
+done
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --mqtt-port 65536
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --interval-ms 60001
+expect_usage "$test_dir/input.csv" --machine-id 1 --mqtt-host localhost
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --mqtt-host
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --mqtt-host ''
+expect_usage "$test_dir/input.csv" --machine-id 1 --mqtt-host --publish
+expect_usage "$test_dir/input.csv" --machine-id 1 --publish --mqtt-host a --mqtt-host b
+expect_usage "$test_dir/input.csv" --publish --machine-id 0
+expect_usage "$test_dir/input.csv" --publish --machine-id 1 --limit 0
+expect_usage "$test_dir/input.csv" --publish --machine-id 1 --limit
+expect_usage "$test_dir/input.csv" --publish --machine-id 1 --machine-id 2
+
 echo 'Todos os testes da CLI passaram.'

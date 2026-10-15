@@ -3,11 +3,11 @@
 Componente em C11 que lê e valida o dataset industrial linha a linha, sem
 carregá-lo inteiro em memória. Na arquitetura do Smart Industry Monitor, é a
 entrada dos dados históricos: nesta etapa, seleciona uma máquina e imprime
-seus registros. MQTT ainda não faz parte deste componente nesta etapa.
+seus registros. Com `--publish`, publica telemetrias JSON no broker MQTT.
 
 ## Requisitos e compilação
 
-Linux, GCC e Make. Execute os comandos abaixo a partir da raiz do repositório:
+Linux, GCC, Make, pkg-config e libmosquitto (no Arch: `sudo pacman -S mosquitto pkgconf`). Execute os comandos abaixo a partir da raiz do repositório:
 
 ```sh
 make -C dataset-replayer
@@ -33,7 +33,7 @@ dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --mac
 make -C dataset-replayer run ARGS="../data/predictive_maintenance_v3.csv --machine-id 6 --limit 5"
 ```
 
-A sintaxe é `dataset-replayer <csv> --machine-id <id> [--limit <quantidade>]`.
+A sintaxe original é `dataset-replayer <csv> --machine-id <id> [--limit <quantidade>]`.
 `--machine-id` é obrigatório; ambos os valores devem ser inteiros positivos.
 Sem `--limit`, todos os registros da máquina são selecionados. Uma máquina
 inexistente encerra normalmente, com uma mensagem e zero registros.
@@ -75,3 +75,298 @@ interrompe a leitura e informa a linha do CSV, sem contar o registro inválido.
 O processamento continua em streaming. `make test` executa os testes do leitor,
 da normalização e da CLI; estes últimos usam ferramentas padrão do Linux e
 arquivos temporários removidos ao final.
+
+## Serialização JSON de telemetria (SIM-03.1)
+
+O módulo independente `telemetry_json.h` converte uma `Telemetry` para JSON,
+sem alterar a estrutura, a leitura CSV, a normalização ou a CLI atual. Não
+publica mensagens MQTT e não realiza operações de rede ou entrada e saída.
+
+```c
+int telemetry_to_json(const Telemetry *telemetry, char *buffer, size_t capacity);
+```
+
+O chamador fornece o buffer e sua capacidade, incluindo o terminador `\0`.
+O retorno é 0 em sucesso ou -1 para argumentos inválidos, buffer insuficiente,
+textos inválidos, indicador de falha diferente de 0/1 ou erro de formatação/locale.
+O buffer inteiro permanece inalterado em erro. Os arrays textuais devem conter
+terminador dentro de seus 64 bytes e UTF-8 válido. Aspas, barras invertidas e
+caracteres de controle são escapados; UTF-8 válido é preservado.
+
+Exemplo de saída (exatamente oito propriedades):
+
+```json
+{"machine_id":6,"machine_type":"Robotic Arm","timestamp":"2024-01-01 00:21:00","temperature":49.5,"current":3.5,"power":null,"state":"NORMAL","failure_within_24h":1}
+```
+
+Os três campos `double` são números ou `null`: `NAN` e ambos os infinitos viram
+`null`, sem omitir propriedades. `power` normalmente é `null`, conforme a
+normalização. O timestamp permanece intacto, sem presumir fuso horário.
+Estados são `UNKNOWN`, `IDLE`, `NORMAL` ou `PEAK`; enumerações não reconhecidas
+seguem a convenção atual da CLI e viram `UNKNOWN`. O indicador preditivo
+`failure_within_24h` permanece um número inteiro 0 ou 1.
+
+A formatação usa `DBL_DECIMAL_DIG`, podendo exibir mais casas que a CLI para
+preservar o valor do `double`. Um locale numérico POSIX `C` é aplicado apenas
+à thread durante a formatação e o anterior é restaurado; o locale global não
+é alterado. Não há dependência externa de JSON. O alvo continua sendo Linux,
+com biblioteca C que ofereça `newlocale`, `uselocale` e `freelocale`.
+
+O JSON é montado em buffer temporário de 2.048 bytes antes de copiar para o
+destino. Cada texto de até 63 bytes expande para no máximo 378 bytes mais duas
+aspas; os dois textos, as chaves, pontuação, estados, inteiros e três números
+em notação científica cabem nesse limite no alvo Linux. Os limites e retornos
+de formatação também são verificados. Os buffers auxiliares de texto são
+dimensionados para essa expansão; não há alocação dinâmica explícita no módulo,
+embora a biblioteca C possa alocar internamente ao criar o locale.
+
+`make -C dataset-replayer all` também compila o objeto do serializador.
+Execute `make -C dataset-replayer test` a partir da raiz para rodar os testes
+existentes e `test_telemetry_json`, incluindo a integração da normalização com
+o JSON. O teste de locale alternativo informa `SKIP` se nenhum dos locales
+candidatos estiver instalado; os demais testes continuam normalmente.
+
+## Cliente publicador MQTT (SIM-03.2)
+
+O módulo `mqtt_publisher.h` usa libmosquitto, MQTT 3.1.1 e uma conexão
+reutilizável, integrado à CLI por `--publish`. No Arch Linux:
+
+```sh
+sudo pacman -S mosquitto pkgconf
+pkg-config --modversion libmosquitto
+make -C dataset-replayer all
+make -C dataset-replayer test
+make -C dataset-replayer test-mqtt
+```
+
+`all` compila e vincula os módulos JSON e MQTT ao executável principal,
+utilizando libmosquitto via pkg-config. `make test` inclui
+validações locais do módulo e não abre conexões nem exige broker ativo.
+`test-mqtt` requer Python 3 (biblioteca padrão), Mosquitto, `mosquitto_sub` e
+`stdbuf` (GNU coreutils). Inicia e encerra um broker temporário em loopback
+com porta dinâmica, sem interferir no broker de desenvolvimento em 1883.
+Também usa pares TCP controlados para verificar recusa de CONNACK, ausência
+de CONNACK/PUBACK, PUBACK de outro identificador e desconexão. As threads
+utilizadas pelo harness Python são exclusivas dos testes; o módulo C não cria
+threads. Os processos e arquivos temporários são removidos ao final.
+
+Interface pública (retorno 0 em sucesso e -1 em erro):
+
+```c
+int mqtt_publisher_connect(MqttPublisher **out, const char *host, int port,
+                           const char *client_id, int timeout_ms);
+int mqtt_publisher_publish(MqttPublisher *publisher, int machine_id,
+                           const char *json);
+int mqtt_publisher_close(MqttPublisher **publisher);
+int mqtt_publisher_topic(int machine_id, char *buffer, size_t capacity);
+```
+
+Inicialize `MqttPublisher *publisher = NULL` e passe seu endereço a `connect`.
+Use `127.0.0.1`, porta 1883 e timeout de 5000 ms para desenvolvimento local.
+Host, porta e client ID são fornecidos pelo chamador. O client ID deve ser
+não vazio e único entre os clientes do broker; recomenda-se combinar máquina
+e PID. O chamador é responsável por essa unicidade. O timeout aceita 1 a
+5000 ms. Somente um contexto pode estar ativo por processo, com chamadas
+sequenciais e sem uso concorrente. O módulo controla `mosquitto_lib_init` e
+`mosquitto_lib_cleanup`; não deve compartilhar o processo com outros usuários
+independentes da libmosquitto.
+
+`connect` aguarda CONNACK aceito via callback antes de fornecer o contexto.
+`publish` constrói `smart-industry/machines/{machine_id}/telemetry`, exigindo
+ID positivo, e envia uma string JSON não vazia com QoS 1 e retain desabilitado.
+O JSON deve vir do serializador; o módulo MQTT não implementa outro parser.
+A função de tópico inclui o terminador na capacidade e preserva o destino
+em erro. O envio retorna sucesso somente após callback de publicação com o
+mesmo MID retornado por `mosquitto_publish`, que em QoS 1 indica recebimento
+do PUBACK. O sucesso inicial de `mosquitto_publish` sozinho não basta.
+
+QoS 1 confirma a recepção pelo broker e permite duplicação; não confirma o
+processamento pelos assinantes nem persistência em disco. As chamadas usam
+`mosquitto_loop` com esperas bloqueantes curtas e prazo monotônico. Não há
+threads no módulo, reconexão automática, repetição de publicação, TLS,
+autenticação ou persistência. O client usa sessão limpa. Chamadas de publicação
+sucessivas reutilizam a mesma conexão.
+
+**Limite de timeout:** a API documentada para uso com `mosquitto_loop` exige
+`mosquitto_connect`, cuja preparação DNS/TCP é síncrona. O prazo começa antes
+dessa chamada, mas não consegue interrompê-la: a espera por CONNACK/PUBACK é
+limitada, enquanto DNS/TCP podem exceder 5 segundos conforme o sistema
+operacional. Portanto não há garantia de timeout total de conexão para hosts
+remotos indisponíveis. O módulo evita sinais globais e threads para contornar
+essa limitação. Referência: https://mosquitto.org/api/files/mosquitto-h.html.
+
+Erros de rede e timeout invalidam o contexto: encerre-o e informe a falha ao
+chamador. Um timeout de PUBACK não prova que o broker deixou de receber a
+mensagem. Argumentos inválidos não invalidam uma conexão saudável. `close`
+aceita ponteiros nulos, tenta DISCONNECT quando a conexão está saudável,
+destrói o cliente, finaliza a biblioteca e limpa o ponteiro mesmo em erro.
+Após encerrar, um novo contexto pode ser aberto. Não use aliases do ponteiro
+já liberado. Como não há loop em segundo plano, longos períodos sem chamadas
+podem exceder o keepalive de 60 segundos e causar desconexão.
+
+
+## Parâmetros de publicação na CLI (SIM-03.3.1)
+
+A CLI reconhece `--publish`, com as opções de configuração abaixo:
+
+| Opção | Padrão | Validação |
+| --- | --- | --- |
+| `--mqtt-host <host>` | `127.0.0.1` | Texto não vazio, sem começar com `--` |
+| `--mqtt-port <porta>` | `1883` | Inteiro de 1 a 65535 |
+| `--interval-ms <ms>` | `1000` | Inteiro de 1 a 60000 |
+
+`--machine-id` continua obrigatório e `--limit` mantém sua validação. As
+opções podem aparecer em qualquer ordem após o caminho CSV; duplicações,
+valores ausentes e opções MQTT sem `--publish` são rejeitados. Os valores
+numéricos aceitam somente dígitos, sem sinais, espaços ou parte fracionária.
+
+Com `--publish`, os argumentos são validados antes de conectar uma única vez
+ao broker. O Client ID combina machine ID e PID (`sim-<machine_id>-<pid>`).
+Após CONNACK aceito, o CSV é processado em streaming: filtro por máquina,
+normalização, serialização JSON e publicação pela conexão existente, no tópico
+`smart-industry/machines/{machine_id}/telemetry`. Exemplo com os valores padrão:
+
+```sh
+dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --limit 5 --publish
+```
+
+Sem `--publish`, a execução original permanece disponível. O reconhecimento
+sintático de um host não verifica sua resolução nem sua disponibilidade.
+Os testes desses parâmetros fazem parte de `make -C dataset-replayer test`
+e não exigem broker.
+
+## Integração do Replayer (SIM-03.3.2)
+
+Inicie o broker de desenvolvimento em outro terminal, se necessário:
+
+```sh
+mosquitto -c config/mosquitto/mosquitto.conf -v
+```
+
+Cada publicação usa QoS 1 e retain desabilitado. O contador avança apenas
+quando `mqtt_publisher_publish` retorna sucesso após o PUBACK correspondente.
+`--limit` limita essas confirmações; registros de outras máquinas não contam.
+Ao completar o CSV ou atingir o limite, a conexão é encerrada e stdout exibe
+`Publicações confirmadas: N`. Sem registros selecionados, N é zero.
+
+Erros de CSV, normalização, JSON ou MQTT interrompem o processamento. O
+callback propaga falhas ao leitor CSV, que identifica a linha. O contexto MQTT
+é fechado também nesses caminhos; stderr informa o erro e a contagem parcial,
+sem resumo de sucesso em stdout, e o processo retorna 1. Uma falha no fechamento
+também retorna erro. Não há reconexão nem repetição automática. Um timeout
+sem PUBACK não permite concluir que o broker não recebeu a mensagem.
+
+Permanece a limitação DNS/TCP síncrona documentada no módulo MQTT.
+
+`make test` verifica o modo tradicional e argumentos inválidos sem broker.
+`make test-mqtt` mantém os testes do módulo e acrescenta o executável real
+com dataset, seleção por máquina, múltiplos registros, limite, tópico e JSON
+recebidos, `power: null`, campos ausentes, zero registros, falhas de CSV/JSON/
+normalização, broker indisponível e erro após uma confirmação parcial.
+Os testes usam broker temporário em loopback e pares MQTT controlados.
+
+
+## Reprodução temporal (SIM-03.3.3)
+
+No modo `--publish`, `--interval-ms` configura a espera entre publicações
+(padrão 1000 ms, valores de 1 a 60000 ms). A primeira mensagem é publicada
+assim que estiver pronta. Para cada mensagem seguinte da máquina selecionada,
+a CLI normaliza e serializa o registro, aguarda o intervalo e publica usando
+a mesma conexão. A espera acontece depois do PUBACK anterior; não há
+compensação do tempo gasto com leitura, processamento ou rede.
+
+A espera usa `nanosleep` POSIX, retomando o tempo restante quando interrompida
+por `EINTR`. Outros erros interrompem a leitura, fecham o contexto MQTT e não
+contabilizam a mensagem ainda não publicada. Não há espera após a última
+publicação, seja por `--limit` ou fim do CSV, nem para registros filtrados.
+O modo tradicional não executa esperas. Ordem e timestamps originais são
+preservados; os intervalos históricos do CSV não são reproduzidos.
+
+```sh
+# Três mensagens, duas esperas de 100 ms
+dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --publish --limit 3 --interval-ms 100
+
+# Uma mensagem imediata, mesmo com intervalo de 60 segundos
+dataset-replayer/build/dataset-replayer data/predictive_maintenance_v3.csv --machine-id 6 --publish --limit 1 --interval-ms 60000
+```
+
+Não há garantia de tempo real: o escalonamento pode prolongar as esperas.
+Durante `nanosleep` não há processamento de eventos MQTT; permanece a
+limitação de keepalive descrita no módulo, especialmente com intervalos
+próximos de 60 segundos e atrasos adicionais. Não há reconexão automática.
+
+`make test-mqtt` também verifica cadência com relógio monotônico, tolerância
+inferior e sem limites superiores apertados. Um executável exclusivo de teste
+usa o linker GNU para observar chamadas de `nanosleep`, verificar ausência de
+pausas iniciais/finais, contar duas esperas para três mensagens e injetar
+`EINTR` e erro. Esse wrapper não integra o executável de produção.
+
+## Dez máquinas simultâneas (SIM-03.4)
+
+O script Bash `dataset-replayer/scripts/run-ten-machines.sh` inicia dez
+instâncias independentes do executável C, todas com `--publish`:
+
+| Tipo original | IDs |
+| --- | --- |
+| CNC | 1, 2, 3 |
+| Pump | 6, 7, 8, 9 |
+| Compressor | 11, 12, 13 |
+
+Os tipos são preservados pelo Replayer a partir do CSV. O script não altera
+payloads, timestamps ou tópicos. Requer Bash 5.1 ou superior (`wait -n -p`),
+Linux e as dependências do Replayer. Compile e inicie o broker em outro
+terminal antes de executar, a partir da raiz do repositório:
+
+```sh
+make -C dataset-replayer all
+mosquitto -c config/mosquitto/mosquitto.conf -v
+```
+
+No terminal da demonstração:
+
+```sh
+# Dez registros por máquina, intervalo de 1000 ms, broker 127.0.0.1:1883
+./dataset-replayer/scripts/run-ten-machines.sh
+
+# Três registros por máquina, intervalo de 100 ms e outro broker
+LIMIT=3 INTERVAL_MS=100 MQTT_HOST=127.0.0.1 MQTT_PORT=1884 \
+  ./dataset-replayer/scripts/run-ten-machines.sh
+```
+
+Configuração por variáveis de ambiente, sem argumentos posicionais:
+
+| Variável | Padrão | Limites |
+| --- | --- | --- |
+| `LIMIT` | `10` | 1 a 2147483647, máximo por máquina |
+| `INTERVAL_MS` | `1000` | 1 a 60000 ms |
+| `MQTT_HOST` | `127.0.0.1` | Não vazio, sem começar com `--` |
+| `MQTT_PORT` | `1883` | 1 a 65535 |
+| `CSV_PATH` | Dataset do repositório | Arquivo legível |
+
+Os números devem conter dígitos, sem sinal nem zeros à esquerda. O script
+resolve o executável e o CSV padrão em relação à sua localização, permitindo
+executá-lo de outro diretório; um `CSV_PATH` relativo usa o diretório atual.
+O limite é um máximo: se o CSV terminar antes, vale o comportamento normal
+do Replayer. Saídas das dez instâncias compartilham o terminal e podem se
+intercalar. Cada instância mantém a cadência sequencial e usa o Client ID
+único gerado pelo Replayer (máquina e PID), sem sincronização entre máquinas.
+
+O script registra os PIDs em stderr, aguarda todos e retorna 0 somente se
+todas as instâncias concluírem com sucesso. A primeira falha detectada causa
+retorno 1, envio de SIGTERM às demais e coleta de todos os filhos com `wait`.
+Ao receber Ctrl+C/SIGINT ou SIGTERM, faz a mesma limpeza e retorna 130 ou 143,
+respectivamente. A interrupção pode ocorrer com publicações em andamento:
+mensagens recebidas pelo broker sem PUBACK observado não são contabilizadas.
+Não há reconexão, reinício automático ou serviço de gerenciamento. SIGKILL,
+falha do sistema ou processos presos em estado de kernel não interrompível
+não permitem garantir a limpeza pelo script.
+
+`make test` inclui validações locais da configuração do script, sem broker.
+`make test-mqtt` usa o Mosquitto temporário e verifica dez processos reais
+simultâneos, IDs, tipos e tópicos, três mensagens por máquina, intervalo,
+encerramento normal, SIGINT/SIGTERM, falha de um filho e broker indisponível.
+Os testes conferem que os PIDs dos filhos não existem após o encerramento.
+Permanecem as limitações de timeout DNS/TCP e keepalive descritas anteriormente.
+
+As evidências, resultados efetivos e limitações da validação integrada estão
+em [SIM-03 — Validação final da publicação MQTT](../docs/sim-03-validacao.md).
