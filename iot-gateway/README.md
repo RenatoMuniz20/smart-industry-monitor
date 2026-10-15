@@ -1,10 +1,10 @@
-# IoT Gateway — SIM-04.1 e SIM-04.2
+# IoT Gateway — SIM-04.1 a SIM-04.3
 
 Módulo C11 independente para interpretar e validar tópico e telemetria JSON.
 O validador JSON (SIM-04.1) e o assinante MQTT (SIM-04.2) são módulos separados.
-`all` compila os dois objetos; ainda não existe executável definitivo, CLI,
-integração entre recebimento e validação, HTTP ou InterSCity. O Dataset Replayer
-não é modificado nem utilizado como dependência de compilação.
+O executável `build/iot-gateway` (SIM-04.3) integra assinatura, callback e
+validação, com CLI e encerramento por sinais. Não há HTTP nem InterSCity.
+O Dataset Replayer não é modificado nem utilizado como dependência de compilação.
 
 ## Build e testes locais
 
@@ -152,7 +152,8 @@ O timeout de conexão aceita 1..5000 ms, compartilhado pelas esperas CONNACK e
 SUBACK e medido com relógio monotônico. O loop síncrono usa esperas de até
 100 ms. **Limitação:** `mosquitto_connect` faz preparação DNS/TCP síncrona;
 o prazo começa antes dela, mas não pode interrompê-la, podendo ultrapassar
-cinco segundos. Não são usados threads, sinais globais ou protocolo manual.
+cinco segundos. O módulo assinante não usa threads, sinais globais ou protocolo
+manual; os sinais da aplicação são tratados pelo `main.c`.
 
 Após conectar, o chamador executa `poll` regularmente. Cada chamada faz uma
 iteração de `mosquitto_loop`, com timeout 0..5000 ms (0 é não bloqueante).
@@ -190,7 +191,8 @@ Não exige broker previamente ativo nem utiliza os dez produtores. O auxiliar
 C informa READY somente após CONNACK e SUBACK, antes de o harness publicar.
 Verifica três mensagens, tópicos e bytes/comprimentos exatos, payload vazio,
 NUL/byte não UTF-8, polling sem mensagens, desconexão, fechamento e reabertura.
-Payload não JSON é intencional: validação pertence à SIM-04.3.
+Payload não JSON é intencional no teste isolado do assinante. O teste da CLI
+verifica separadamente a integração com o validador.
 
 Pares TCP mínimos de teste verificam CONNACK recusado, ausência de CONNACK ou
 SUBACK, MID incorreto, concessões QoS 0/2/128 e quantidade incorreta de concessões.
@@ -200,3 +202,84 @@ sockets e arquivos temporários são encerrados mesmo em falha. Testes locais
 continuam separados e não exigem rede. Falhas de alocação/relógio e perda de
 rede durante o próprio envio de SUBSCRIBE não têm injeção específica nesta
 etapa; os caminhos correspondentes possuem tratamento de erro no módulo.
+
+
+## Aplicação e CLI (SIM-04.3)
+
+Na raiz, com o broker de desenvolvimento em outro terminal:
+
+```sh
+make -C iot-gateway all
+mosquitto -c config/mosquitto/mosquitto.conf -v
+```
+
+Inicie o Gateway em um segundo terminal:
+
+```sh
+iot-gateway/build/iot-gateway
+iot-gateway/build/iot-gateway --help
+# Exemplo de configuração explícita:
+iot-gateway/build/iot-gateway --host 127.0.0.1 --port 1883   --client-id smart-industry-gateway --timeout-ms 5000
+```
+
+| Opção | Padrão | Validação |
+| --- | --- | --- |
+| `--host` | `127.0.0.1` | Texto não vazio, sem começar com `--` |
+| `--port` | `1883` | Inteiro de 1 a 65535 |
+| `--client-id` | `smart-industry-gateway` | Texto não vazio, sem começar com `--` |
+| `--timeout-ms` | `5000` | Inteiro de 1 a 5000 |
+| `--help` | — | Usado sozinho; imprime ajuda e retorna 0 sem broker |
+
+Opções podem aparecer em qualquer ordem; duplicadas, desconhecidas, sem valor
+ou fora dos limites retornam 1 com diagnóstico em stderr. Números aceitam
+somente dígitos, sem sinais ou espaços. O client ID deve ser único no broker;
+o padrão é adequado para uma instância do Gateway.
+
+O contexto do callback é inicializado antes de `connect`, pois mensagens podem
+chegar antes de seu retorno. Após CONNACK e SUBACK confirmados, stdout recebe:
+
+```text
+Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
+```
+
+Somente então os produtores devem ser iniciados. O loop usa polling síncrono
+de 250 ms. Cada callback passa tópico, bytes e comprimento ao validador, sem
+presumir NUL. Uma telemetria válida produz uma linha `Telemetria válida: `
+seguida de um objeto JSON com os oito campos, mantendo `null` diferente de
+zero. Textos são representados com escaping da json-c; não são interpolados
+como texto bruto no terminal. Exemplo observado no teste de integração:
+
+```text
+Telemetria válida: {"machine_id":1,"machine_type":"CNC","timestamp":"original sample","temperature":0.0,"current":null,"power":null,"state":"PEAK","failure_within_24h":1}
+```
+
+Para mensagem inválida, stderr recebe o diagnóstico do validador e o tamanho,
+sem imprimir o payload ou tópico não confiáveis. Exemplo observado:
+
+```text
+Telemetria inválida: JSON inválido, incompleto ou UTF-8 inválido (payload=18 bytes).
+```
+
+A mensagem inválida é descartada e o Gateway continua recebendo. Não há
+armazenamento, agregação, alertas ou transmissão HTTP. Logs válidos reformatam
+números como `double`; timestamp e textos decodificados permanecem preservados.
+
+Ctrl+C/SIGINT ou SIGTERM solicitam encerramento normal (código 0). Os handlers
+apenas atualizam uma flag `volatile sig_atomic_t`. O loop observa a flag antes
+de classificar erro de polling e fecha o Subscriber fora do handler. Uma
+solicitação normal produz `Gateway encerrado por solicitação.` em stdout.
+Erros de argumentos, conexão, comunicação, logging ou fechamento retornam 1.
+O diagnóstico MQTT é obtido antes de `close`, que sobrescreve o último erro.
+
+Permanecem as limitações de DNS/TCP síncrono: sinal durante conexão pode levar
+até a conclusão dessa operação ou do prazo de confirmações para ser observado.
+Durante a recepção, a resposta ao sinal depende do polling e da duração do
+callback/saída de logs. Não há reconexão automática. SIGKILL não executa limpeza.
+As limitações de chaves repetidas, tamanho e demais módulos continuam válidas.
+
+`make test` inclui `tests/test_cli.py` sem broker, para ajuda e argumentos.
+`make test-mqtt` executa a comunicação isolada do assinante e
+`tests/test_cli.py --mqtt`, com broker temporário reutilizando auxiliares da
+SIM-04.2. Cobre conexão, sequência válida/inválida/válida, null/zero, escaping,
+broker indisponível, falha de comunicação, SIGINT/SIGTERM e coleta do processo.
+Não exige os dez produtores; essa validação pertence à SIM-04.4.

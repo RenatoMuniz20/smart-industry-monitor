@@ -11,7 +11,10 @@ TEST_TARGET = build/test_gateway_telemetry
 
 .PHONY: all test test-mqtt clean
 
-all: $(TARGET) build/mqtt_subscriber.o
+all: build/iot-gateway
+
+build/iot-gateway: src/main.c $(TARGET) build/mqtt_subscriber.o include/gateway_telemetry.h include/mqtt_subscriber.h Makefile | build
+	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ src/main.c $(TARGET) build/mqtt_subscriber.o $(JSON_LDLIBS) $(MQTT_LDLIBS) $(LDLIBS)
 
 $(TARGET): src/gateway_telemetry.c include/gateway_telemetry.h Makefile | build
 	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) -c -o $@ src/gateway_telemetry.c
@@ -25,12 +28,14 @@ build/mqtt_subscriber.o: src/mqtt_subscriber.c include/mqtt_subscriber.h Makefil
 $(MQTT_TEST_TARGET): tests/test_mqtt_subscriber.c build/mqtt_subscriber.o include/mqtt_subscriber.h Makefile | build
 	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_mqtt_subscriber.c build/mqtt_subscriber.o $(MQTT_LDLIBS) $(LDLIBS)
 
-test-mqtt: $(MQTT_TEST_TARGET)
+test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
+	python3 -B tests/test_cli.py --mqtt
 
-test: $(TEST_TARGET) $(MQTT_TEST_TARGET)
+test: $(TEST_TARGET) $(MQTT_TEST_TARGET) build/iot-gateway
 	./$(TEST_TARGET)
 	./$(MQTT_TEST_TARGET)
+	python3 -B tests/test_cli.py
 
 build:
 	mkdir -p $@
