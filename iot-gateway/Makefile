@@ -8,6 +8,8 @@ MQTT_LDLIBS = $(shell pkg-config --libs libmosquitto)
 MQTT_TEST_TARGET = build/test_mqtt_subscriber
 TARGET = build/gateway_telemetry.o
 TEST_TARGET = build/test_gateway_telemetry
+MAPPING_TARGET = build/interscity_mapping.o
+MAPPING_TEST_TARGET = build/test_interscity_mapping
 
 .PHONY: all test test-mqtt test-e2e clean
 
@@ -28,6 +30,12 @@ build/mqtt_subscriber.o: src/mqtt_subscriber.c include/mqtt_subscriber.h Makefil
 $(MQTT_TEST_TARGET): tests/test_mqtt_subscriber.c build/mqtt_subscriber.o include/mqtt_subscriber.h Makefile | build
 	$(CC) $(CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_mqtt_subscriber.c build/mqtt_subscriber.o $(MQTT_LDLIBS) $(LDLIBS)
 
+$(MAPPING_TARGET): src/interscity_mapping.c include/interscity_mapping.h Makefile | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ src/interscity_mapping.c
+
+$(MAPPING_TEST_TARGET): tests/test_interscity_mapping.c $(MAPPING_TARGET) include/interscity_mapping.h Makefile | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_mapping.c $(MAPPING_TARGET) $(LDLIBS)
+
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
 	python3 -B tests/test_cli.py --mqtt
@@ -36,9 +44,10 @@ test-e2e: build/iot-gateway
 	$(MAKE) -C ../dataset-replayer all
 	python3 -B tests/test_end_to_end.py
 
-test: $(TEST_TARGET) $(MQTT_TEST_TARGET) build/iot-gateway
+test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) build/iot-gateway
 	./$(TEST_TARGET)
 	./$(MQTT_TEST_TARGET)
+	./$(MAPPING_TEST_TARGET)
 	python3 -B tests/test_cli.py
 
 build:
