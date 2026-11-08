@@ -5,6 +5,8 @@ JSON_CPPFLAGS = $(shell pkg-config --cflags json-c)
 JSON_LDLIBS = $(shell pkg-config --libs json-c)
 MQTT_CPPFLAGS = $(shell pkg-config --cflags libmosquitto)
 MQTT_LDLIBS = $(shell pkg-config --libs libmosquitto)
+CURL_CPPFLAGS = $(shell pkg-config --cflags libcurl)
+CURL_LDLIBS = $(shell pkg-config --libs libcurl)
 MQTT_TEST_TARGET = build/test_mqtt_subscriber
 TARGET = build/gateway_telemetry.o
 TEST_TARGET = build/test_gateway_telemetry
@@ -12,6 +14,8 @@ MAPPING_TARGET = build/interscity_mapping.o
 MAPPING_TEST_TARGET = build/test_interscity_mapping
 PAYLOAD_TARGET = build/interscity_payload.o
 PAYLOAD_TEST_TARGET = build/test_interscity_payload
+CLIENT_TARGET = build/interscity_client.o
+CLIENT_TEST_TARGET = build/test_interscity_client
 
 .PHONY: all test test-mqtt test-e2e clean
 
@@ -44,6 +48,12 @@ $(PAYLOAD_TARGET): src/interscity_payload.c include/interscity_payload.h include
 $(PAYLOAD_TEST_TARGET): tests/test_interscity_payload.c $(PAYLOAD_TARGET) include/interscity_payload.h include/gateway_telemetry.h Makefile | build
 	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_payload.c $(PAYLOAD_TARGET) $(JSON_LDLIBS) $(LDLIBS)
 
+$(CLIENT_TARGET): src/interscity_client.c include/interscity_client.h Makefile | build
+	$(CC) $(CPPFLAGS) $(CURL_CPPFLAGS) $(CFLAGS) -c -o $@ src/interscity_client.c
+
+$(CLIENT_TEST_TARGET): tests/test_interscity_client.c $(CLIENT_TARGET) include/interscity_client.h Makefile | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_client.c $(CLIENT_TARGET) $(CURL_LDLIBS) $(LDLIBS)
+
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
 	python3 -B tests/test_cli.py --mqtt
@@ -52,11 +62,12 @@ test-e2e: build/iot-gateway
 	$(MAKE) -C ../dataset-replayer all
 	python3 -B tests/test_end_to_end.py
 
-test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) $(PAYLOAD_TEST_TARGET) build/iot-gateway
+test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) $(PAYLOAD_TEST_TARGET) $(CLIENT_TEST_TARGET) build/iot-gateway
 	./$(TEST_TARGET)
 	./$(MQTT_TEST_TARGET)
 	./$(MAPPING_TEST_TARGET)
 	./$(PAYLOAD_TEST_TARGET)
+	python3 -B tests/test_interscity_client.py
 	python3 -B tests/test_cli.py
 
 build:
