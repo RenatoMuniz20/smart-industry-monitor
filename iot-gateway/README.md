@@ -1,14 +1,18 @@
-# IoT Gateway — SIM-04.1 a SIM-04.3
+# IoT Gateway — SIM-04.1 a SIM-05.5
 
 Módulo C11 independente para interpretar e validar tópico e telemetria JSON.
 O validador JSON (SIM-04.1) e o assinante MQTT (SIM-04.2) são módulos separados.
 O executável `build/iot-gateway` (SIM-04.3) integra assinatura, callback e
-validação, com CLI e encerramento por sinais. Não há HTTP nem InterSCity.
+validação, com CLI e encerramento por sinais. Desde a SIM-05.5, também pode
+encaminhar cada telemetria válida ao InterSCity por HTTP, somente quando
+habilitado por opções (ver [Envio ao InterSCity](#envio-ao-interscity-sim-055)).
 O Dataset Replayer não é modificado nem utilizado como dependência de compilação.
 
 ## Build e testes locais
 
-Requer GCC, Make, pkg-config, json-c 0.19 e libmosquitto 2.1.2. Na raiz do repositório:
+Requer GCC, Make, pkg-config, json-c 0.19 e libmosquitto 2.1.2. Desde a SIM-05.5,
+também libcurl com suporte a TLS (no Ubuntu 24.04: `libcurl4-openssl-dev`).
+Na raiz do repositório:
 
 ```sh
 pkg-config --modversion json-c
@@ -19,8 +23,8 @@ make -C iot-gateway clean
 
 O Makefile usa `-std=c11 -Wall -Wextra -Wpedantic`, obtém flags com pkg-config
 e vincula cada teste apenas à biblioteca necessária (json-c ou libmosquitto).
-`make test` não abre conexões nem exige broker. O módulo de validação permanece
-independente de MQTT.
+`make test` não exige broker nem rede externa; o teste do cliente HTTP usa apenas
+um servidor falso em 127.0.0.1. O módulo de validação permanece independente de MQTT.
 
 ## Interface
 
@@ -260,8 +264,8 @@ sem imprimir o payload ou tópico não confiáveis. Exemplo observado:
 Telemetria inválida: JSON inválido, incompleto ou UTF-8 inválido (payload=18 bytes).
 ```
 
-A mensagem inválida é descartada e o Gateway continua recebendo. Não há
-armazenamento, agregação, alertas ou transmissão HTTP. Logs válidos reformatam
+A mensagem inválida é descartada e o Gateway continua recebendo. Sem as opções
+InterSCity, não há armazenamento, agregação, alertas ou transmissão HTTP. Logs válidos reformatam
 números como `double`; timestamp e textos decodificados permanecem preservados.
 
 Ctrl+C/SIGINT ou SIGTERM solicitam encerramento normal (código 0). Os handlers
@@ -302,3 +306,77 @@ das dependências já descritas. Não altera nem encerra brokers externos.
 
 Procedimento manual, resultados efetivamente observados, regressões e
 limitações: [SIM-04 — Validação integrada](../docs/sim-04-validacao.md).
+
+
+## Envio ao InterSCity (SIM-05.5)
+
+Contrato da API, decisões e evidências da integração:
+[SIM-05 — Integração com o InterSCity](../docs/sim-05-interscity.md).
+
+```sh
+iot-gateway/build/iot-gateway \
+  --interscity-url https://cidadesinteligentes.lsdi.ufma.br/interscity_lh \
+  --interscity-map config/interscity/machines.conf
+```
+
+| Opção | Padrão | Validação |
+| --- | --- | --- |
+| `--interscity-url` | — | `http://` ou `https://`, sem espaços nem caracteres de controle; `/` finais ignoradas |
+| `--interscity-map` | — | Arquivo `<machine_id> <uuid>` (ver `interscity_mapping.h`) |
+| `--interscity-timeout-ms` | `5000` | Inteiro de 1 a 60000, por envio, conexão incluída |
+
+URL e mapeamento são usados juntos; informar apenas um deles, ou só o timeout,
+é erro de argumento. **Sem essas opções, o Gateway se comporta exatamente como
+na SIM-04**, com as mesmas mensagens. O cliente HTTP é criado e o mapeamento é
+carregado antes da conexão MQTT; mapeamento inválido encerra com código 1 e
+informa a linha, por exemplo:
+
+```text
+Erro no mapeamento InterSCity: Quebra de linha CRLF (caractere CR) no mapeamento (linha 2).
+```
+
+Com o envio habilitado, stdout recebe antes da prontidão:
+
+```text
+InterSCity habilitado: <url> (10 máquinas mapeadas, timeout 5000 ms).
+```
+
+Cada telemetria válida continua gerando `Telemetria válida: ...` e, em seguida:
+
+1. O UUID é obtido do mapeamento. Máquina sem UUID não é enviada, pois o Data
+   Collector descartaria em silêncio um UUID desconhecido.
+2. `interscity_payload` monta o corpo (medição ausente omite a capability;
+   `power` não é enviado; timestamp `AAAA-MM-DD HH:MM:SS` vira ISO 8601 sem fuso).
+3. `interscity_client` faz `POST {url}/adaptor/resources/{uuid}/data`, reutilizando
+   a mesma conexão HTTP/TLS entre envios. Somente HTTP 201 é sucesso.
+
+```text
+InterSCity: machine_id=1 enviada (HTTP 201, 87 ms, conexão reutilizada).
+InterSCity: machine_id=2 sem UUID no mapeamento; não enviada.
+InterSCity: machine_id=5 falhou: Resposta HTTP diferente de 201 (HTTP 500, 12 ms).
+```
+
+Sucessos vão para stdout e falhas para stderr. Nenhuma falha HTTP, de rede ou de
+timeout encerra o Gateway. No encerramento, antes de `Gateway encerrado por
+solicitação.`, stdout recebe o resumo `InterSCity: N enviadas, F falhas, U sem mapeamento.`
+
+**Limitações desta etapa:**
+
+- Envio síncrono no callback, numa única thread: enquanto um POST aguarda
+  resposta, novas mensagens MQTT esperam. Cada envio deve ser mais rápido que o
+  intervalo agregado das máquinas; medido na validação real.
+- Sem reenvio automático: o POST não é idempotente, e um timeout não informa se
+  o dado foi aceito. O QoS 1 já foi confirmado ao broker quando o callback roda,
+  então uma amostra cujo envio falha é perdida.
+- HTTP 201 indica publicação pelo Adaptor no RabbitMQ, não armazenamento: a
+  persistência só é comprovada consultando o Data Collector.
+- Um sinal durante um envio é observado após o envio terminar (até o timeout).
+
+`make test` inclui `tests/test_interscity_client.py` (cliente contra um
+InterSCity falso: 201, 400, 500, timeout, porta fechada e reuso de conexão) e
+`tests/test_interscity_gateway.py` sem argumentos (opções, mapeamentos inválidos
+e o mapeamento real do repositório, sem broker). `make test-mqtt` executa também
+`tests/test_interscity_gateway.py --mqtt`: Mosquitto temporário, InterSCity falso
+e Gateway real, conferindo o corpo de cada envio, a omissão de medição ausente,
+o reuso da conexão, máquina sem mapeamento, resposta 500 e continuidade após
+falhas. Nenhum teste automatizado acessa a instância real do LSDi.
