@@ -21,8 +21,8 @@ CLIENT_TEST_TARGET = build/test_interscity_client
 
 all: build/iot-gateway
 
-build/iot-gateway: src/main.c $(TARGET) build/mqtt_subscriber.o include/gateway_telemetry.h include/mqtt_subscriber.h Makefile | build
-	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ src/main.c $(TARGET) build/mqtt_subscriber.o $(JSON_LDLIBS) $(MQTT_LDLIBS) $(LDLIBS)
+build/iot-gateway: src/main.c $(TARGET) build/mqtt_subscriber.o $(MAPPING_TARGET) $(PAYLOAD_TARGET) $(CLIENT_TARGET) include/gateway_telemetry.h include/mqtt_subscriber.h include/interscity_mapping.h include/interscity_payload.h include/interscity_client.h Makefile | build
+	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ src/main.c $(TARGET) build/mqtt_subscriber.o $(MAPPING_TARGET) $(PAYLOAD_TARGET) $(CLIENT_TARGET) $(JSON_LDLIBS) $(MQTT_LDLIBS) $(CURL_LDLIBS) $(LDLIBS)
 
 $(TARGET): src/gateway_telemetry.c include/gateway_telemetry.h Makefile | build
 	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) -c -o $@ src/gateway_telemetry.c
@@ -57,6 +57,7 @@ $(CLIENT_TEST_TARGET): tests/test_interscity_client.c $(CLIENT_TARGET) include/i
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
 	python3 -B tests/test_cli.py --mqtt
+	python3 -B tests/test_interscity_gateway.py --mqtt
 
 test-e2e: build/iot-gateway
 	$(MAKE) -C ../dataset-replayer all
@@ -69,6 +70,7 @@ test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) $(PAYLOAD_TEST_T
 	./$(PAYLOAD_TEST_TARGET)
 	python3 -B tests/test_interscity_client.py
 	python3 -B tests/test_cli.py
+	python3 -B tests/test_interscity_gateway.py
 
 build:
 	mkdir -p $@
