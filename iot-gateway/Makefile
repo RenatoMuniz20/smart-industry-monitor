@@ -10,6 +10,8 @@ TARGET = build/gateway_telemetry.o
 TEST_TARGET = build/test_gateway_telemetry
 MAPPING_TARGET = build/interscity_mapping.o
 MAPPING_TEST_TARGET = build/test_interscity_mapping
+PAYLOAD_TARGET = build/interscity_payload.o
+PAYLOAD_TEST_TARGET = build/test_interscity_payload
 
 .PHONY: all test test-mqtt test-e2e clean
 
@@ -36,6 +38,12 @@ $(MAPPING_TARGET): src/interscity_mapping.c include/interscity_mapping.h Makefil
 $(MAPPING_TEST_TARGET): tests/test_interscity_mapping.c $(MAPPING_TARGET) include/interscity_mapping.h Makefile | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_mapping.c $(MAPPING_TARGET) $(LDLIBS)
 
+$(PAYLOAD_TARGET): src/interscity_payload.c include/interscity_payload.h include/gateway_telemetry.h Makefile | build
+	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) -c -o $@ src/interscity_payload.c
+
+$(PAYLOAD_TEST_TARGET): tests/test_interscity_payload.c $(PAYLOAD_TARGET) include/interscity_payload.h include/gateway_telemetry.h Makefile | build
+	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_payload.c $(PAYLOAD_TARGET) $(JSON_LDLIBS) $(LDLIBS)
+
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
 	python3 -B tests/test_cli.py --mqtt
@@ -44,10 +52,11 @@ test-e2e: build/iot-gateway
 	$(MAKE) -C ../dataset-replayer all
 	python3 -B tests/test_end_to_end.py
 
-test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) build/iot-gateway
+test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) $(PAYLOAD_TEST_TARGET) build/iot-gateway
 	./$(TEST_TARGET)
 	./$(MQTT_TEST_TARGET)
 	./$(MAPPING_TEST_TARGET)
+	./$(PAYLOAD_TEST_TARGET)
 	python3 -B tests/test_cli.py
 
 build:
