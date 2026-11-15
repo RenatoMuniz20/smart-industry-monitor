@@ -12,7 +12,7 @@ um backend REST em C.
 Dataset CSV (Industrial Machine Predictive Maintenance v3)
   → Dataset Replayers em C (um processo por máquina)
   → MQTT 3.1.1, QoS 1 (Eclipse Mosquitto)
-  → IoT Gateway em C (validação do contrato JSON)
+  → IoT Gateway em C (validação do contrato JSON, reconexão MQTT e deduplicação)
   → HTTPS (libcurl)
   → InterSCity: Kong → Resource Adaptor → RabbitMQ → Data Collector
   → Backend REST em C (libmicrohttpd; consulta ao InterSCity por libcurl e json-c)
@@ -36,8 +36,9 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | SIM-04 | IoT Gateway: assinatura MQTT e validação | Concluída | [IoT Gateway](iot-gateway/README.md), [SIM-04](docs/sim-04-validacao.md) |
 | SIM-05 | Integração com o InterSCity (instância do LSDi/UFMA) | Concluída | [SIM-05](docs/sim-05-interscity.md) |
 | SIM-06 | Backend REST em C: consulta ao InterSCity e API | Concluída | [SIM-06](docs/sim-06-backend.md), [Backend](backend/README.md) |
+| SIM-08 | Tolerância a falhas no Gateway: reconexão MQTT, deduplicação e consulta antes do reenvio | Concluída | [SIM-08](docs/sim-08-tolerancia-falhas.md) |
 | — | Dashboard web | Pendente | — |
-| — | Tolerância a falhas e escalabilidade | Pendente | — |
+| — | Escalabilidade | Pendente | — |
 | — | Docker Compose e implantação em nuvem | Pendente | — |
 
 ## Estrutura do repositório
@@ -110,15 +111,20 @@ backend/build/backend --port 8080 --machines config/interscity/machines.conf
 curl -s http://127.0.0.1:8080/api/machines/latest
 ```
 
-A instância do InterSCity é compartilhada pelas equipes da disciplina: cada
-execução do passo 3 grava novas amostras, inclusive cópias de amostras já
-enviadas. Consultas e cuidados estão em [SIM-05](docs/sim-05-interscity.md).
+A instância do InterSCity é compartilhada pelas equipes da disciplina. Dentro
+de uma mesma execução do Gateway, uma amostra já enviada (mesma máquina e mesmo
+timestamp, ou anterior) é ignorada. Reiniciar o Gateway zera essa memória, e
+amostras antigas podem ser reenviadas. Cuidados em
+[SIM-05](docs/sim-05-interscity.md) e [SIM-08](docs/sim-08-tolerancia-falhas.md).
 
 ## Limitações atuais
 
 - `power` não existe no dataset e é publicado como `null`;
   `failure_within_24h` é uma predição do dataset, não uma falha medida.
-- Não há reconexão MQTT automática, reenvio HTTP nem deduplicação no Gateway.
+- Tolerância a falhas (SIM-08): a deduplicação é só em memória, a consulta antes
+  do reenvio usa janela fixa de 2 s, e mensagens publicadas durante a queda do
+  broker se perdem (sessão MQTT limpa). Detalhes em
+  [SIM-08](docs/sim-08-tolerancia-falhas.md).
 - O Gateway envia ao InterSCity de forma síncrona numa única thread: adequado
   para as dez máquinas (média de 69 ms por envio), não para centenas.
 - O Mosquitto de desenvolvimento aceita conexões anônimas somente em localhost;
