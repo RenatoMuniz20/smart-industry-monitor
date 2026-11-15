@@ -1,4 +1,4 @@
-/* Driver de teste do cliente de consulta (SIM-06.2).
+/* Driver de teste do cliente de consulta ao InterSCity (SIM-06.2 e 06.4).
  * Recebe a URL base de um InterSCity falso (tests/test_interscity_query.py). */
 #include "interscity_query.h"
 
@@ -25,6 +25,7 @@ int main(int argc, char **argv)
     const char *uuids[] = {UUID_A, UUID_B};
     const char *bad_uuids[] = {"x; drop table"};
     IsqMachine out[4];
+    IsqHistory h;
     size_t count = 0;
     char route[256];
     char err[256];
@@ -76,6 +77,42 @@ int main(int argc, char **argv)
     /* 6. Servidor fora do ar -> erro de rede. */
     rc = interscity_query_last("http://127.0.0.1:1/ok", 3000, uuids, 2, out, 4, &count, err, sizeof err);
     CHECK(rc == -1 && strstr(err, "falha de rede") != NULL, "conexão recusada vira falha de rede");
+
+    /* 7. Histórico: duplicatas removidas e ordem cronológica. */
+    snprintf(route, sizeof route, "%s/hist", argv[1]);
+    rc = interscity_query_history(route, 3000, UUID_A, "2024-01-01T00:00:00",
+                                  "2024-01-01T01:00:00", &h, err, sizeof err);
+    CHECK(rc == 0, "histórico válido sem erro");
+    CHECK(h.motor_temperature.count == 2, "4 registros repetidos viram 2 timestamps");
+    CHECK(h.motor_temperature.count == 2
+          && strcmp(h.motor_temperature.items[0].date, "2024-01-01T00:24:00.000Z") == 0
+          && h.motor_temperature.items[0].number > 49.07 && h.motor_temperature.items[0].number < 49.09,
+          "primeiro ponto: 00:24 com 49.08");
+    CHECK(h.motor_temperature.count == 2
+          && strcmp(h.motor_temperature.items[1].date, "2024-01-01T00:43:00.000Z") == 0
+          && h.motor_temperature.items[1].number > 42.00 && h.motor_temperature.items[1].number < 42.02,
+          "segundo ponto: 00:43 com 42.01");
+    CHECK(h.operating_state.count == 1 && strcmp(h.operating_state.items[0].text, "IDLE") == 0,
+          "estado textual preservado no histórico");
+    CHECK(h.current.count == 0, "capability ausente vira série vazia");
+    interscity_history_free(&h);
+
+    /* 8. 404 'Resource not found' significa sem dados. */
+    snprintf(route, sizeof route, "%s/histnone", argv[1]);
+    rc = interscity_query_history(route, 3000, UUID_A, "2024-01-01T00:00:00",
+                                  "2024-01-01T01:00:00", &h, err, sizeof err);
+    CHECK(rc == 0 && h.motor_temperature.count == 0, "404 'Resource not found' vira histórico vazio");
+    interscity_history_free(&h);
+
+    /* 9. Data fora do formato é recusada antes do envio. */
+    rc = interscity_query_history(route, 3000, UUID_A, "2024-1-1",
+                                  "2024-01-01T01:00:00", &h, err, sizeof err);
+    CHECK(rc == -1 && strstr(err, "formato") != NULL, "data fora do formato é recusada");
+
+    /* 10. Início posterior ao fim é recusado. */
+    rc = interscity_query_history(route, 3000, UUID_A, "2024-01-01T02:00:00",
+                                  "2024-01-01T01:00:00", &h, err, sizeof err);
+    CHECK(rc == -1 && strstr(err, "posterior") != NULL, "início posterior ao fim é recusado");
 
     if (failures > 0) {
         printf("test_interscity_query: %d falha(s).\n", failures);

@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BODY_SIZE (64 * 1024)
+/* 1 MiB: o histórico de um período pode ser grande. */
+#define BODY_SIZE (1024 * 1024)
 
 struct HttpServer {
     struct MHD_Daemon *daemon;
@@ -38,12 +39,19 @@ static enum MHD_Result send_json(struct MHD_Connection *connection,
     return ret;
 }
 
+static const char *request_arg(const HttpRequest *req, const char *key)
+{
+    return MHD_lookup_connection_value((struct MHD_Connection *)req->conn,
+                                       MHD_GET_ARGUMENT_KIND, key);
+}
+
 static enum MHD_Result handle_request(void *cls, struct MHD_Connection *connection,
                                       const char *url, const char *method,
                                       const char *version, const char *upload_data,
                                       size_t *upload_data_size, void **con_cls)
 {
     HttpServer *server = cls;
+    HttpRequest req;
     unsigned int status = 500;
     char *body;
     enum MHD_Result ret;
@@ -59,7 +67,12 @@ static enum MHD_Result handle_request(void *cls, struct MHD_Connection *connecti
     }
     body[0] = '\0';
 
-    if (server->route(server->cls, method, url, body, BODY_SIZE, &status) != 0) {
+    req.method = method;
+    req.url = url;
+    req.conn = connection;
+    req.arg = request_arg;
+
+    if (server->route(server->cls, &req, body, BODY_SIZE, &status) != 0) {
         status = 500;
         snprintf(body, BODY_SIZE, "%s", "{\"error\":\"erro interno\"}");
     }

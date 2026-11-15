@@ -268,3 +268,240 @@ cleanup:
     free(resp.data);
     return rc;
 }
+
+int interscity_datetime_is_valid(const char *s)
+{
+    if (s == NULL || strlen(s) != 19) {
+        return 0;
+    }
+    for (int i = 0; i < 19; i++) {
+        if (i == 4 || i == 7) {
+            if (s[i] != '-') return 0;
+        } else if (i == 10) {
+            if (s[i] != 'T') return 0;
+        } else if (i == 13 || i == 16) {
+            if (s[i] != ':') return 0;
+        } else if (!isdigit((unsigned char)s[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int series_push(IsqSeries *s, const char *date, const char *text, double number)
+{
+    IsqPoint *p;
+
+    if (s->count == s->capacity) {
+        size_t cap = s->capacity ? s->capacity * 2 : 64;
+        IsqPoint *items = realloc(s->items, cap * sizeof *items);
+
+        if (items == NULL) {
+            return -1;
+        }
+        s->items = items;
+        s->capacity = cap;
+    }
+    p = &s->items[s->count++];
+    memset(p, 0, sizeof *p);
+    copy_str(p->date, sizeof p->date, date);
+    copy_str(p->text, sizeof p->text, text);
+    p->number = number;
+    return 0;
+}
+
+static int parse_series(json_object *arr, IsqSeries *s, int textual)
+{
+    size_t n;
+
+    if (arr == NULL || !json_object_is_type(arr, json_type_array)) {
+        return 0;
+    }
+    n = json_object_array_length(arr);
+    for (size_t i = 0; i < n; i++) {
+        json_object *el = json_object_array_get_idx(arr, i);
+        json_object *value = NULL;
+        json_object *date = NULL;
+        const char *text = "";
+
+        if (el == NULL || !json_object_object_get_ex(el, "value", &value) || value == NULL
+            || !json_object_object_get_ex(el, "date", &date) || date == NULL) {
+            continue;
+        }
+        if (textual) {
+            if (!json_object_is_type(value, json_type_string)) {
+                continue;
+            }
+            text = json_object_get_string(value);
+        } else if (!json_object_is_type(value, json_type_int)
+                   && !json_object_is_type(value, json_type_double)) {
+            continue;
+        }
+        if (series_push(s, json_object_get_string(date), text,
+                        textual ? 0.0 : json_object_get_double(value)) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int point_cmp(const void *a, const void *b)
+{
+    return strcmp(((const IsqPoint *)a)->date, ((const IsqPoint *)b)->date);
+}
+
+/* Ordena por data e remove timestamps repetidos (o InterSCity devolve duplicatas). */
+static void series_normalize(IsqSeries *s)
+{
+    size_t w = 0;
+
+    if (s->count == 0) {
+        return;
+    }
+    qsort(s->items, s->count, sizeof *s->items, point_cmp);
+    for (size_t r = 0; r < s->count; r++) {
+        if (w > 0 && strcmp(s->items[w - 1].date, s->items[r].date) == 0) {
+            continue;
+        }
+        s->items[w++] = s->items[r];
+    }
+    s->count = w;
+}
+
+static int parse_history(const char *text, IsqHistory *out, char *error, size_t error_size)
+{
+    json_object *root;
+    json_object *resources = NULL;
+    json_object *res;
+    json_object *caps = NULL;
+    json_object *arr = NULL;
+    int rc = 0;
+
+    root = json_tokener_parse(text);
+    if (root == NULL) {
+        fail(error, error_size, "resposta não é JSON válido");
+        return -1;
+    }
+    if (!json_object_object_get_ex(root, "resources", &resources) || resources == NULL
+        || !json_object_is_type(resources, json_type_array)) {
+        json_object_put(root);
+        fail(error, error_size, "resposta sem a lista 'resources'");
+        return -1;
+    }
+    if (json_object_array_length(resources) == 0) {
+        json_object_put(root);
+        return 0;
+    }
+
+    res = json_object_array_get_idx(resources, 0);
+    if (res == NULL || !json_object_object_get_ex(res, "capabilities", &caps) || caps == NULL) {
+        json_object_put(root);
+        fail(error, error_size, "recurso sem 'capabilities'");
+        return -1;
+    }
+
+    if (json_object_object_get_ex(caps, "sim_operating_state", &arr)) {
+        rc |= parse_series(arr, &out->operating_state, 1);
+    }
+    if (json_object_object_get_ex(caps, "sim_motor_temperature", &arr)) {
+        rc |= parse_series(arr, &out->motor_temperature, 0);
+    }
+    if (json_object_object_get_ex(caps, "sim_current", &arr)) {
+        rc |= parse_series(arr, &out->current, 0);
+    }
+    if (json_object_object_get_ex(caps, "sim_failure_within_24h", &arr)) {
+        rc |= parse_series(arr, &out->failure_within_24h, 0);
+    }
+
+    json_object_put(root);
+    if (rc != 0) {
+        fail(error, error_size, "memória insuficiente ao ler o histórico");
+        return -1;
+    }
+    series_normalize(&out->operating_state);
+    series_normalize(&out->motor_temperature);
+    series_normalize(&out->current);
+    series_normalize(&out->failure_within_24h);
+    return 0;
+}
+
+static void series_free(IsqSeries *s)
+{
+    free(s->items);
+    s->items = NULL;
+    s->count = 0;
+    s->capacity = 0;
+}
+
+void interscity_history_free(IsqHistory *history)
+{
+    if (history == NULL) {
+        return;
+    }
+    series_free(&history->operating_state);
+    series_free(&history->motor_temperature);
+    series_free(&history->current);
+    series_free(&history->failure_within_24h);
+}
+
+int interscity_query_history(const char *base_url, long timeout_ms, const char *uuid,
+                             const char *start, const char *end, IsqHistory *out,
+                             char *error, size_t error_size)
+{
+    Buffer resp = {NULL, 0};
+    char url[512];
+    char body[128];
+    long status = 0;
+    int rc = -1;
+
+    if (base_url == NULL || uuid == NULL || start == NULL || end == NULL || out == NULL) {
+        fail(error, error_size, "argumentos inválidos");
+        return -1;
+    }
+    memset(out, 0, sizeof *out);
+
+    if (!uuid_is_safe(uuid)) {
+        fail(error, error_size, "uuid inválido: %s", uuid);
+        return -1;
+    }
+    if (!interscity_datetime_is_valid(start) || !interscity_datetime_is_valid(end)) {
+        fail(error, error_size, "datas devem estar no formato AAAA-MM-DDTHH:MM:SS");
+        return -1;
+    }
+    if (strcmp(start, end) > 0) {
+        fail(error, error_size, "início posterior ao fim");
+        return -1;
+    }
+    if (snprintf(url, sizeof url, "%s/collector/resources/%s/data", base_url, uuid)
+        >= (int)sizeof url) {
+        fail(error, error_size, "URL base muito longa");
+        return -1;
+    }
+    snprintf(body, sizeof body, "{\"start_date\":\"%s\",\"end_date\":\"%s\"}", start, end);
+
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        fail(error, error_size, "falha ao iniciar libcurl");
+        return -1;
+    }
+
+    if (http_post_json(url, body, timeout_ms, &resp, &status, error, error_size) != 0) {
+        goto cleanup;
+    }
+    if (status == 404 && resp.data != NULL && strstr(resp.data, "Resource not found") != NULL) {
+        rc = 0;
+        goto cleanup;
+    }
+    if (status != 200) {
+        fail(error, error_size, "InterSCity respondeu HTTP %ld", status);
+        goto cleanup;
+    }
+
+    rc = parse_history(resp.data != NULL ? resp.data : "", out, error, error_size);
+
+cleanup:
+    free(resp.data);
+    if (rc != 0) {
+        interscity_history_free(out);
+    }
+    return rc;
+}

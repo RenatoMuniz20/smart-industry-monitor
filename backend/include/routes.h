@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "http_server.h"
 #include "machine_map.h"
 
 typedef struct {
@@ -13,7 +14,7 @@ typedef struct {
 } RouteContext;
 
 /* Compatível com HttpRouteFn: `cls` é um RouteContext *. */
-int routes_handle(void *cls, const char *method, const char *url,
-                  char *body, size_t body_size, unsigned int *status);
+int routes_handle(void *cls, const HttpRequest *req, char *body, size_t body_size,
+                  unsigned int *status);
 
 #endif

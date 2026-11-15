@@ -23,13 +23,45 @@ typedef struct {
     IsqSample failure_within_24h;
 } IsqMachine;
 
+/* Um ponto de uma série histórica. Usa `text` ou `number` conforme a série. */
+typedef struct {
+    char date[ISQ_DATE_LEN];
+    char text[ISQ_TEXT_LEN];
+    double number;
+} IsqPoint;
+
+typedef struct {
+    IsqPoint *items;
+    size_t count;
+    size_t capacity;
+} IsqSeries;
+
+typedef struct {
+    IsqSeries operating_state;
+    IsqSeries motor_temperature;
+    IsqSeries current;
+    IsqSeries failure_within_24h;
+} IsqHistory;
+
 /* POST {base_url}/collector/resources/data/last com {"uuids":[...]}.
  * Preenche out[0..*out_count) na ordem da resposta.
- * Retorna 0 em sucesso; -1 em erro, com a mensagem em `error`.
- * Requer curl_global_init() chamado antes (feito aqui de forma idempotente). */
+ * Retorna 0 em sucesso; -1 em erro, com a mensagem em `error`. */
 int interscity_query_last(const char *base_url, long timeout_ms,
                           const char *const *uuids, size_t uuid_count,
                           IsqMachine *out, size_t out_capacity, size_t *out_count,
                           char *error, size_t error_size);
+
+/* Verifica o formato AAAA-MM-DDTHH:MM:SS (UTC, sem fuso). */
+int interscity_datetime_is_valid(const char *s);
+
+/* POST {base_url}/collector/resources/{uuid}/data com start_date/end_date.
+ * Séries ordenadas por data e sem timestamps repetidos. Resposta
+ * 404 "Resource not found" significa sem dados e devolve séries vazias.
+ * Retorna 0 em sucesso; -1 em erro. Libere com interscity_history_free(). */
+int interscity_query_history(const char *base_url, long timeout_ms, const char *uuid,
+                             const char *start, const char *end, IsqHistory *out,
+                             char *error, size_t error_size);
+
+void interscity_history_free(IsqHistory *history);
 
 #endif
