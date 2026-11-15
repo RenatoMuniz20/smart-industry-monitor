@@ -1,21 +1,28 @@
 CC = gcc
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Iinclude
-LDLIBS = -lmicrohttpd
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Iinclude -I/usr/include/json-c
+LDLIBS = -lmicrohttpd -lcurl -ljson-c
 
 BUILD = build
 BIN = $(BUILD)/backend
-SRCS = src/main.c src/http_server.c
+TEST_QUERY = $(BUILD)/test_interscity_query
+SRCS = src/main.c src/http_server.c src/interscity_query.c
+QUERY_SRCS = src/interscity_query.c
 
 .PHONY: all test clean
 
 all: $(BIN)
 
-$(BIN): $(SRCS) include/http_server.h
+$(BIN): $(SRCS) include/http_server.h include/interscity_query.h
 	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(LDLIBS)
 
-test: $(BIN)
+$(TEST_QUERY): tests/test_interscity_query.c $(QUERY_SRCS) include/interscity_query.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -o $@ tests/test_interscity_query.c $(QUERY_SRCS) $(LDLIBS)
+
+test: $(BIN) $(TEST_QUERY)
 	python3 -B tests/test_backend.py $(BIN)
+	python3 -B tests/test_interscity_query.py $(TEST_QUERY)
 
 clean:
 	rm -rf $(BUILD)
