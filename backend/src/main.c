@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #define DEFAULT_PORT 8080L
+#define DEFAULT_BIND "127.0.0.1"
 #define DEFAULT_INTERSCITY_URL "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh"
 #define DEFAULT_TIMEOUT_MS 5000L
 #define DEFAULT_MACHINES "../config/interscity/machines.conf"
@@ -55,14 +56,17 @@ static int install_signal_handlers(void)
 
 static void usage(const char *prog)
 {
-    printf("Uso: %s [--port N] [--machines ARQUIVO] [--interscity-url URL]"
+    printf("Uso: %s [--port N] [--bind IP] [--machines ARQUIVO] [--interscity-url URL]"
            " [--interscity-timeout-ms N]\n", prog);
+    printf("Padrões: porta %ld, bind %s (só localhost). Use --bind 0.0.0.0 para aceitar"
+           " conexões da rede.\n", DEFAULT_PORT, DEFAULT_BIND);
 }
 
 int main(int argc, char **argv)
 {
     long port = DEFAULT_PORT;
     long timeout_ms = DEFAULT_TIMEOUT_MS;
+    const char *bind_addr = DEFAULT_BIND;
     const char *machines_path = DEFAULT_MACHINES;
     const char *interscity_url = DEFAULT_INTERSCITY_URL;
     MachineEntry machines[MAX_MACHINES];
@@ -90,6 +94,8 @@ int main(int argc, char **argv)
                 fprintf(stderr, "timeout inválido: %s\n", argv[i + 1]);
                 return 2;
             }
+        } else if (strcmp(argv[i], "--bind") == 0) {
+            bind_addr = argv[i + 1];
         } else if (strcmp(argv[i], "--interscity-url") == 0) {
             interscity_url = argv[i + 1];
         } else if (strcmp(argv[i], "--machines") == 0) {
@@ -118,14 +124,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (http_server_start(&server, (uint16_t)port, routes_handle, &ctx,
+    if (http_server_start(&server, bind_addr, (uint16_t)port, routes_handle, &ctx,
                           error, sizeof error) != 0) {
         fprintf(stderr, "erro: %s\n", error);
         return 1;
     }
 
-    printf("backend escutando na porta %u com %zu máquinas\n",
-           (unsigned int)port, machine_count);
+    printf("backend escutando em %s:%u com %zu máquinas\n",
+           bind_addr, (unsigned int)port, machine_count);
     fflush(stdout);
 
     while (!stop_requested) {

@@ -2,34 +2,29 @@
 
 Servidor REST em C (libmicrohttpd) que consulta o InterSCity com libcurl e json-c.
 
-Estado atual:
-- **SIM-06.1 (feito):** `GET /api/health`; 404 para rotas desconhecidas; 405 para método errado; encerramento limpo por SIGINT/SIGTERM.
-- **SIM-06.2 (feito):** `interscity_query_last()` faz POST em `/collector/resources/data/last`.
-- **SIM-06.3 (feito):** `GET /api/machines/latest` devolve o último valor de cada máquina.
-- **SIM-06.4 (em teste):**
-  - `GET /api/machines`: lista do mapeamento.
-  - `GET /api/machines/{id}/history?start=AAAA-MM-DDTHH:MM:SS&end=AAAA-MM-DDTHH:MM:SS`: histórico em UTC, sem timestamps repetidos e em ordem cronológica.
-- Pendente: teste com a instância real da UFMA (SIM-06.5).
+## Estado
+- **SIM-06.1:** `GET /api/health`; 404 para rotas desconhecidas; 405 para método errado; encerramento limpo por SIGINT/SIGTERM.
+- **SIM-06.2:** `interscity_query_last()`: POST em `/collector/resources/data/last`.
+- **SIM-06.3:** `GET /api/machines/latest`: último valor de cada máquina.
+- **SIM-06.4:** `GET /api/machines` e `GET /api/machines/{id}/history?start=&end=` (UTC, sem repetidos, em ordem).
+- **SIM-06.5:** `make smoke-real`: teste somente leitura contra a instância da UFMA.
+- **SIM-06.6:** o servidor escuta só em `127.0.0.1` por padrão. Para aceitar conexões da rede, use `--bind 0.0.0.0` conscientemente.
+
+Detalhes e resultados: [docs/sim-06-backend.md](../docs/sim-06-backend.md).
 
 ## Dependências
     sudo apt install build-essential libmicrohttpd-dev libcurl4-openssl-dev libjson-c-dev python3
 
 ## Compilar e testar
-    make -C backend test
+    make -C backend test          # 47 verificações locais, sem acessar a UFMA
+    make -C backend smoke-real    # manual: consulta a instância real (somente leitura)
 
 ## Executar
-Rodar a partir da pasta `backend/` (o caminho padrão do mapeamento é `../config/interscity/machines.conf`):
+Rodar a partir da raiz do repositório:
 
-    ./build/backend --port 8080
+    backend/build/backend --port 8080 --machines config/interscity/machines.conf
     curl -s http://127.0.0.1:8080/api/machines
+    curl -s http://127.0.0.1:8080/api/machines/latest
     curl -s "http://127.0.0.1:8080/api/machines/1/history?start=2024-01-01T00:00:00&end=2024-01-01T01:00:00"
-    # Ctrl+C para encerrar
 
-Opções: `--machines ARQUIVO`, `--interscity-url URL`, `--interscity-timeout-ms N`.
-
-## Teste contra a instância real (SIM-06.5)
-Somente leitura; não entra em `make test`:
-
-    make -C backend smoke-real
-
-Consulta o InterSCity da UFMA pelo backend e imprime o último valor de cada máquina e a contagem do histórico na janela 2024-01-01T00:00 a 01:00 (UTC). Termina com `N de M verificações passaram`.
+Opções: `--port N`, `--bind IP` (padrão `127.0.0.1`), `--machines ARQUIVO` (padrão `../config/interscity/machines.conf`, relativo à pasta `backend/`), `--interscity-url URL`, `--interscity-timeout-ms N`.

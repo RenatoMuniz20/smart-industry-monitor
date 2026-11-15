@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Testes do servidor (SIM-06.1): /api/health, 404, 405 e SIGTERM.
+"""Testes do servidor: /api/health, 404, 405, SIGTERM, bind e opção inválida.
 
 Usa um arquivo de máquinas temporário e um InterSCity inexistente (não é consultado aqui).
 Não acessa a instância do InterSCity da UFMA.
 """
 import json
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -45,6 +46,16 @@ def wait_ready(url, proc, timeout=5.0):
     raise RuntimeError("servidor não respondeu a tempo")
 
 
+def listening_addresses(port):
+    out = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True).stdout
+    addrs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) >= 4 and cols[3].endswith(f":{port}"):
+            addrs.append(cols[3])
+    return addrs
+
+
 def main():
     if len(sys.argv) != 2:
         print("uso: test_backend.py <binario>", file=sys.stderr)
@@ -55,36 +66,51 @@ def main():
     with os.fdopen(fd, "w") as f:
         f.write("1 18fa502d-2427-4485-a3a6-0b3f64585634\n")
 
-    port = free_port()
-    base = f"http://127.0.0.1:{port}"
-    proc = subprocess.Popen(
-        [binary, "--port", str(port), "--machines", machines,
-         "--interscity-url", "http://127.0.0.1:9", "--interscity-timeout-ms", "1000"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     try:
-        wait_ready(base + "/api/health", proc)
+        port = free_port()
+        base = f"http://127.0.0.1:{port}"
+        proc = subprocess.Popen(
+            [binary, "--port", str(port), "--machines", machines,
+             "--interscity-url", "http://127.0.0.1:9", "--interscity-timeout-ms", "1000"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            wait_ready(base + "/api/health", proc)
 
-        status, body = request(base + "/api/health")
-        assert status == 200, status
-        assert json.loads(body) == {"status": "ok"}, body
-        print("PASS: GET /api/health -> 200 {status: ok}")
+            status, body = request(base + "/api/health")
+            assert status == 200, status
+            assert json.loads(body) == {"status": "ok"}, body
+            print("PASS: GET /api/health -> 200 {status: ok}")
 
-        status, _ = request(base + "/rota-inexistente")
-        assert status == 404, status
-        print("PASS: rota desconhecida -> 404")
+            status, _ = request(base + "/rota-inexistente")
+            assert status == 404, status
+            print("PASS: rota desconhecida -> 404")
 
-        status, _ = request(base + "/api/health", method="POST")
-        assert status == 405, status
-        print("PASS: POST /api/health -> 405")
+            status, _ = request(base + "/api/health", method="POST")
+            assert status == 405, status
+            print("PASS: POST /api/health -> 405")
 
-        proc.send_signal(signal.SIGTERM)
-        code = proc.wait(timeout=5)
-        assert code == 0, code
-        print("PASS: SIGTERM -> encerramento limpo (código 0)")
+            if shutil.which("ss"):
+                addrs = listening_addresses(port)
+                assert addrs and all(a == f"127.0.0.1:{port}" for a in addrs), addrs
+                print("PASS: por padrão o servidor escuta só em 127.0.0.1")
+            else:
+                print("SKIP: comando 'ss' indisponível; bind padrão não verificado")
+
+            proc.send_signal(signal.SIGTERM)
+            code = proc.wait(timeout=5)
+            assert code == 0, code
+            print("PASS: SIGTERM -> encerramento limpo (código 0)")
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+
+        r = subprocess.run([binary, "--port", str(free_port()), "--machines", machines,
+                            "--bind", "999.1.1.1"],
+                           capture_output=True, text=True, timeout=10)
+        assert r.returncode == 1 and "endereço inválido" in r.stderr, (r.returncode, r.stderr)
+        print("PASS: --bind inválido -> backend recusa iniciar")
     finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
         os.unlink(machines)
 
     print("test_backend: todos os testes passaram.")
