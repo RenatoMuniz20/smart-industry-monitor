@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""SIM-05.5.4: Gateway com envio ao InterSCity.
+"""SIM-05.5.4 + SIM-08: Gateway com envio ao InterSCity.
 
 Sem argumentos: opções e mapeamento, sem broker e sem rede.
 Com --mqtt: Mosquitto temporário + InterSCity falso local + Gateway real.
 Nenhum caso acessa a instância real do LSDi.
+
+SIM-08 cobre: duplicata ignorada; timeout confirmado pelo Data Collector (sem
+reenvio); timeout não confirmado (uma consulta e um reenvio); HTTP 500 (sem
+reenvio); a publicação depois de uma pausa do broker é processada.
 """
 from http.server import ThreadingHTTPServer
 import json
@@ -23,8 +27,11 @@ import test_interscity_client as mock
 REPO = Path(__file__).resolve().parents[2]
 UUID_OK = '00000000-0000-4000-8000-000000000201'
 UUID_500 = '00000000-0000-4000-8000-000000000500'
+UUID_SLOW = '00000000-0000-4000-8000-000000000999'    # Adaptor responde após o timeout; coletor tem a amostra
+UUID_MISSING = '00000000-0000-4000-8000-000000000997'  # Adaptor responde após o timeout; coletor não tem
 REAL_URL = 'https://cidadesinteligentes.lsdi.ufma.br/interscity_lh'  # validada, nunca contatada
 FAKE_URL = 'http://127.0.0.1:9/interscity_lh'
+ENVIADA = re.compile(r'InterSCity: machine_id=\d+ enviada \(HTTP 201')
 
 
 def run(args):
@@ -122,56 +129,72 @@ def integration_tests():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base_url = f'http://127.0.0.1:{server.server_address[1]}{mock.PREFIX}'
     try:
-        with tempfile.TemporaryDirectory(prefix='sim05-gateway-') as directory:
+        with tempfile.TemporaryDirectory(prefix='sim08-gateway-') as directory:
             root = Path(directory)
             mapping = root / 'machines.conf'
-            mapping.write_text(f'# teste\n1 {UUID_OK}\n5 {UUID_500}\n')
+            mapping.write_text(f'# teste\n1 {UUID_OK}\n5 {UUID_500}\n6 {UUID_SLOW}\n7 {UUID_MISSING}\n')
             with temporary_broker(root) as (broker, port):
                 output, errors = root / 'stdout.log', root / 'stderr.log'
                 with output.open('w') as out, errors.open('w') as err:
                     process = subprocess.Popen(
-                        [GATEWAY, '--port', str(port), '--client-id', f'sim05-gateway-{os.getpid()}',
+                        [GATEWAY, '--port', str(port), '--client-id', f'sim08-gateway-{os.getpid()}',
                          '--interscity-url', base_url, '--interscity-map', str(mapping),
                          '--interscity-timeout-ms', '2000'], stdout=out, stderr=err)
                     try:
                         diagnostic = lambda: output.read_text() + errors.read_text()
                         lines = lambda: output.read_text().splitlines()
-                        sent = lambda: [line for line in lines() if line.startswith('InterSCity: machine_id=')]
+                        enviadas = lambda: [line for line in lines() if ENVIADA.match(line)]
                         wait_for(process, lambda: READY in lines(), diagnostic)
                         assert lines()[0] == (f'InterSCity habilitado: {base_url} '
-                                              '(2 máquinas mapeadas, timeout 2000 ms).'), diagnostic()
+                                              '(4 máquinas mapeadas, timeout 2000 ms).'), diagnostic()
                         assert errors.read_text() == '', diagnostic()
 
                         publish(port, 1, telemetry(1))                       # amostra de referência
-                        wait_for(process, lambda: len(sent()) == 1, diagnostic)
-                        publish(port, 1, telemetry(1, current=None, state='PEAK', failure_within_24h=1))
-                        wait_for(process, lambda: len(sent()) == 2, diagnostic)
+                        wait_for(process, lambda: len(enviadas()) == 1, diagnostic)
+                        publish(port, 1, telemetry(1, current=None, state='PEAK', failure_within_24h=1,
+                                                   timestamp='2024-01-01 00:00:30'))
+                        wait_for(process, lambda: len(enviadas()) == 2, diagnostic)
                         publish(port, 2, telemetry(2))                       # sem mapeamento
                         wait_for(process, lambda: 'machine_id=2 sem UUID' in errors.read_text(), diagnostic)
                         publish(port, 5, telemetry(5, machine_type='Pump'))  # InterSCity responde 500
                         wait_for(process, lambda: 'machine_id=5 falhou' in errors.read_text(), diagnostic)
+                        publish(port, 1, telemetry(1, current=None, state='PEAK', failure_within_24h=1,
+                                                   timestamp='2024-01-01 00:00:30'))  # duplicata
+                        wait_for(process, lambda: 'machine_id=1 ignorada' in output.read_text(), diagnostic)
                         publish(port, 1, b'{}')                              # inválida
                         wait_for(process, lambda: 'Telemetria inválida:' in errors.read_text(), diagnostic)
                         publish(port, 1, telemetry(1, timestamp='2024-01-01 00:01:00'))
-                        wait_for(process, lambda: len(sent()) == 3, diagnostic)
+                        wait_for(process, lambda: len(enviadas()) == 3, diagnostic)
+                        publish(port, 6, telemetry(6, timestamp='2024-01-01 00:02:00'))  # timeout, coletor confirma
+                        wait_for(process, lambda: 'machine_id=6 confirmada' in output.read_text(), diagnostic)
+                        publish(port, 7, telemetry(7, timestamp='2024-01-01 00:02:00'))  # timeout, não armazenada
+                        wait_for(process, lambda: 'machine_id=7 falhou' in errors.read_text(), diagnostic)
                         assert process.poll() is None, diagnostic()          # nenhuma falha derrubou o Gateway
 
                         pattern = r'InterSCity: machine_id=1 enviada \(HTTP 201, \d+ ms, conexão (nova|reutilizada)\)\.'
-                        matches = [re.fullmatch(pattern, line) for line in sent()]
-                        assert all(matches), diagnostic()
+                        matches = [re.fullmatch(pattern, line) for line in enviadas()]
+                        assert len(matches) == 3 and all(matches), diagnostic()
                         assert matches[0].group(1) == 'nova' and matches[1].group(1) == 'reutilizada', diagnostic()
                         error_lines = errors.read_text().splitlines()
-                        assert len(error_lines) == 3, diagnostic()
+                        assert len(error_lines) == 6, diagnostic()
                         assert error_lines[0] == 'InterSCity: machine_id=2 sem UUID no mapeamento; não enviada.'
                         assert re.fullmatch(r'InterSCity: machine_id=5 falhou: Resposta HTTP diferente de 201 '
                                             r'\(HTTP 500, \d+ ms\)\.', error_lines[1]), diagnostic()
                         assert error_lines[2].startswith('Telemetria inválida:'), diagnostic()
+                        notice = (r'InterSCity: machine_id={} sem resposta \(Tempo esgotado aguardando o InterSCity\); '
+                                  r'consultando o Data Collector antes de qualquer reenvio\.')
+                        assert re.fullmatch(notice.format(6), error_lines[3]), diagnostic()
+                        assert re.fullmatch(notice.format(7), error_lines[4]), diagnostic()
+                        assert re.fullmatch(r'InterSCity: machine_id=7 falhou: Tempo esgotado aguardando o InterSCity '
+                                            r'\(HTTP 0, \d+ ms\)\.', error_lines[5]), diagnostic()
 
                         process.send_signal(signal.SIGTERM)
                         assert process.wait(timeout=10) == 0, diagnostic()
                         final = lines()
-                        assert sum(line.startswith(VALID) for line in final) == 5, diagnostic()
-                        assert final[-2] == 'InterSCity: 3 enviadas, 1 falhas, 1 sem mapeamento.', diagnostic()
+                        assert sum(line.startswith(VALID) for line in final) == 8, diagnostic()
+                        assert final[-3] == 'InterSCity: 4 enviadas, 2 falhas, 1 sem mapeamento.', diagnostic()
+                        assert final[-2] == ('InterSCity: 1 duplicadas ignoradas, 1 confirmadas pelo Data Collector, '
+                                             '1 reenviadas.'), diagnostic()
                         assert final[-1] == 'Gateway encerrado por solicitação.', diagnostic()
                         assert not Path(f'/proc/{process.pid}').exists()
                     finally:
@@ -185,17 +208,22 @@ def integration_tests():
 
     with mock.LOCK:
         received = list(mock.RECEIVED)
+        queries = list(mock.COLLECTOR_QUERIES)
     expected = [
         (path(UUID_OK), expected_body()),
-        (path(UUID_OK), expected_body(current=False, state='PEAK', failure=1)),
+        (path(UUID_OK), expected_body(timestamp='2024-01-01T00:00:30', current=False, state='PEAK', failure=1)),
         (path(UUID_500), expected_body()),
         (path(UUID_OK), expected_body(timestamp='2024-01-01T00:01:00')),
+        (path(UUID_SLOW), expected_body(timestamp='2024-01-01T00:02:00')),
+        (path(UUID_MISSING), expected_body(timestamp='2024-01-01T00:02:00')),
+        (path(UUID_MISSING), expected_body(timestamp='2024-01-01T00:02:00')),  # reenvio único
     ]
     observed = [(request['path'], json.loads(request['body'])) for request in received]
     assert observed == expected, json.dumps(received, indent=2, ensure_ascii=False)
     assert all(request['content_type'] == 'application/json' for request in received), received
-    print('PASS: Gateway → InterSCity falso: 4 envios conferidos (201, medição omitida, 500), '
-          'máquina sem mapeamento, inválida, SIGTERM=0', flush=True)
+    assert queries == [UUID_SLOW, UUID_MISSING], queries  # uma consulta por ambiguidade, nenhuma para duplicata
+    print('PASS: Gateway → InterSCity falso: 7 publicações conferidas (duplicata ignorada, timeout confirmado, '
+          'timeout com reenvio único, 500, SIGTERM=0)', flush=True)
     print('CORPO ENVIADO:', received[0]['body'], flush=True)
 
 

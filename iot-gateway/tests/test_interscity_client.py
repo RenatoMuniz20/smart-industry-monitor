@@ -4,6 +4,11 @@
 Sobe um servidor HTTP/1.1 em 127.0.0.1 (somente biblioteca padrão), executa
 build/test_interscity_client e confere cada requisição recebida: método,
 caminho, cabeçalhos e corpo. Não acessa a rede externa nem a instância real.
+
+SIM-08: o falso Data Collector responde em /collector/resources/data/last.
+Essas consultas ficam em COLLECTOR_QUERIES, separadas das publicações (RECEIVED).
+Sufixos lentos (999 e 997) respondem 201 depois de SLOW_DELAY_S segundos, para
+forçar timeout no cliente (o limite usado nos testes de integração é 2 s).
 """
 import json
 import os
@@ -16,7 +21,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CLIENT_TEST = os.environ.get('SIM_INTERSCITY_CLIENT_TEST', './build/test_interscity_client')
 PREFIX = '/interscity_lh'  # simula o prefixo da instância do LSDi
-RECEIVED = []
+COLLECTOR_PATH = PREFIX + '/collector/resources/data/last'
+SLOW_SUFFIXES = ('999', '997')  # respondem depois do timeout do cliente
+SLOW_DELAY_S = 4                # folga: timeout de 2 s nos testes de integração (2 s não era confiável)
+RECEIVED = []           # publicações no Adaptor
+COLLECTOR_QUERIES = []  # consultas ao Data Collector (uuid de cada uma)
 LOCK = threading.Lock()
 
 
@@ -36,6 +45,9 @@ class MockAdaptor(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get('Content-Length', '0'))
         body = self.rfile.read(length)
+        if self.path == COLLECTOR_PATH:
+            self.collector(body)
+            return
         with LOCK:
             RECEIVED.append({
                 'path': self.path,
@@ -46,8 +58,8 @@ class MockAdaptor(BaseHTTPRequestHandler):
             })
         suffix = self.path.rstrip('/').split('/')[-2][-3:] if self.path.count('/') >= 4 else ''
         try:
-            if suffix == '999':
-                time.sleep(2)
+            if suffix in SLOW_SUFFIXES:
+                time.sleep(SLOW_DELAY_S)
                 self.respond(201)
             elif suffix in ('400', '500'):
                 self.respond(int(suffix), b'{"error":"simulado"}')
@@ -55,6 +67,20 @@ class MockAdaptor(BaseHTTPRequestHandler):
                 self.respond(201)
         except (BrokenPipeError, ConnectionResetError):
             pass  # o cliente desistiu (teste de timeout)
+
+    def collector(self, body):
+        uuid = json.loads(body.decode('utf-8'))['uuids'][0]
+        with LOCK:
+            COLLECTOR_QUERIES.append(uuid)
+        try:
+            if uuid[-3:] == '999':  # armazenada apesar do timeout do Adaptor
+                payload = {'resources': [{'id': uuid, 'capabilities': {'sim_operating_state': [
+                    {'value': 'IDLE', 'date': '2024-01-01T00:02:00.000Z'}]}}]}
+                self.respond(200, json.dumps(payload).encode('utf-8'))
+            else:
+                self.respond(404, b'{"error":"Resource not found"}')
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
 
 def closed_port():
