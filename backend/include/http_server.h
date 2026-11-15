@@ -21,9 +21,9 @@ struct HttpRequest {
 typedef int (*HttpRouteFn)(void *cls, const HttpRequest *req, char *body,
                            size_t body_size, unsigned int *status);
 
-/* Sobe o servidor HTTP na porta indicada (todas as interfaces). */
-int http_server_start(HttpServer **out, uint16_t port, HttpRouteFn route, void *cls,
-                      char *error, size_t error_size);
+/* Sobe o servidor HTTP em `bind_addr` (IPv4, ex.: "127.0.0.1") na porta indicada. */
+int http_server_start(HttpServer **out, const char *bind_addr, uint16_t port,
+                      HttpRouteFn route, void *cls, char *error, size_t error_size);
 
 /* Encerra o servidor e libera a memória. Aceita NULL. */
 void http_server_stop(HttpServer *server);

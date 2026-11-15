@@ -1,9 +1,12 @@
 #include "http_server.h"
 
+#include <arpa/inet.h>
 #include <microhttpd.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 /* 1 MiB: o histórico de um período pode ser grande. */
 #define BODY_SIZE (1024 * 1024)
@@ -83,17 +86,28 @@ static enum MHD_Result handle_request(void *cls, struct MHD_Connection *connecti
     return ret;
 }
 
-int http_server_start(HttpServer **out, uint16_t port, HttpRouteFn route, void *cls,
-                      char *error, size_t error_size)
+int http_server_start(HttpServer **out, const char *bind_addr, uint16_t port,
+                      HttpRouteFn route, void *cls, char *error, size_t error_size)
 {
     HttpServer *server;
     struct MHD_Daemon *daemon;
+    struct sockaddr_in addr;
+    char message[256];
 
-    if (out == NULL || route == NULL) {
+    if (out == NULL || route == NULL || bind_addr == NULL) {
         set_error(error, error_size, "argumentos inválidos");
         return -1;
     }
     *out = NULL;
+
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, bind_addr, &addr.sin_addr) != 1) {
+        snprintf(message, sizeof message, "endereço inválido: %s", bind_addr);
+        set_error(error, error_size, message);
+        return -1;
+    }
 
     server = calloc(1, sizeof *server);
     if (server == NULL) {
@@ -104,13 +118,13 @@ int http_server_start(HttpServer **out, uint16_t port, HttpRouteFn route, void *
     server->cls = cls;
 
     daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, port, NULL, NULL,
-                              &handle_request, server, MHD_OPTION_END);
+                              &handle_request, server,
+                              MHD_OPTION_SOCK_ADDR, (struct sockaddr *)&addr,
+                              MHD_OPTION_END);
     if (daemon == NULL) {
-        char message[128];
-
         free(server);
-        snprintf(message, sizeof message, "não foi possível abrir a porta %u",
-                 (unsigned int)port);
+        snprintf(message, sizeof message, "não foi possível abrir %s:%u",
+                 bind_addr, (unsigned int)port);
         set_error(error, error_size, message);
         return -1;
     }
