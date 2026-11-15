@@ -26,3 +26,10 @@ Rodar a partir da pasta `backend/` (o caminho padrão do mapeamento é `../confi
     # Ctrl+C para encerrar
 
 Opções: `--machines ARQUIVO`, `--interscity-url URL`, `--interscity-timeout-ms N`.
+
+## Teste contra a instância real (SIM-06.5)
+Somente leitura; não entra em `make test`:
+
+    make -C backend smoke-real
+
+Consulta o InterSCity da UFMA pelo backend e imprime o último valor de cada máquina e a contagem do histórico na janela 2024-01-01T00:00 a 01:00 (UTC). Termina com `N de M verificações passaram`.

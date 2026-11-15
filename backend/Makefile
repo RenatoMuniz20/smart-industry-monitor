@@ -9,7 +9,7 @@ SRCS = src/main.c src/http_server.c src/routes.c src/machine_map.c src/interscit
 QUERY_SRCS = src/interscity_query.c
 HDRS = include/http_server.h include/routes.h include/machine_map.h include/interscity_query.h
 
-.PHONY: all test clean
+.PHONY: all test smoke-real clean
 
 all: $(BIN)
 
@@ -26,6 +26,10 @@ test: $(BIN) $(TEST_QUERY)
 	python3 -B tests/test_interscity_query.py $(TEST_QUERY)
 	python3 -B tests/test_machines_latest.py $(BIN)
 	python3 -B tests/test_machines_history.py $(BIN)
+
+# Somente leitura, contra a instância real da UFMA. Não entra no `test`.
+smoke-real: $(BIN)
+	python3 -B tests/smoke_real_interscity.py $(BIN) ../config/interscity/machines.conf https://cidadesinteligentes.lsdi.ufma.br/interscity_lh
 
 clean:
 	rm -rf $(BUILD)
