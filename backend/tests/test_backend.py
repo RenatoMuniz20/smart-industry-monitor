@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Testes do esqueleto do backend (SIM-06.1).
+"""Testes do servidor (SIM-06.1): /api/health, 404, 405 e SIGTERM.
 
-Sobe o binário em uma porta local livre e verifica:
-  - GET /api/health -> 200 {"status": "ok"}
-  - rota desconhecida -> 404
-  - POST /api/health -> 405
-  - SIGTERM -> encerramento limpo (código 0)
-
+Usa um arquivo de máquinas temporário e um InterSCity inexistente (não é consultado aqui).
 Não acessa a instância do InterSCity da UFMA.
 """
 import json
+import os
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -53,10 +50,17 @@ def main():
         print("uso: test_backend.py <binario>", file=sys.stderr)
         return 2
     binary = sys.argv[1]
+
+    fd, machines = tempfile.mkstemp(suffix=".conf")
+    with os.fdopen(fd, "w") as f:
+        f.write("1 18fa502d-2427-4485-a3a6-0b3f64585634\n")
+
     port = free_port()
     base = f"http://127.0.0.1:{port}"
-    proc = subprocess.Popen([binary, "--port", str(port)],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.Popen(
+        [binary, "--port", str(port), "--machines", machines,
+         "--interscity-url", "http://127.0.0.1:9", "--interscity-timeout-ms", "1000"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     try:
         wait_ready(base + "/api/health", proc)
 
@@ -81,6 +85,7 @@ def main():
         if proc.poll() is None:
             proc.kill()
             proc.wait()
+        os.unlink(machines)
 
     print("test_backend: todos os testes passaram.")
     return 0

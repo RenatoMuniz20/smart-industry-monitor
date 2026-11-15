@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define BODY_SIZE (64 * 1024)
+
 struct HttpServer {
     struct MHD_Daemon *daemon;
+    HttpRouteFn route;
+    void *cls;
 };
-
-#define HEALTH_PATH "/api/health"
 
 static void set_error(char *error, size_t error_size, const char *message)
 {
@@ -41,30 +43,41 @@ static enum MHD_Result handle_request(void *cls, struct MHD_Connection *connecti
                                       const char *version, const char *upload_data,
                                       size_t *upload_data_size, void **con_cls)
 {
-    (void)cls;
+    HttpServer *server = cls;
+    unsigned int status = 500;
+    char *body;
+    enum MHD_Result ret;
+
     (void)version;
     (void)upload_data;
     (void)upload_data_size;
     (void)con_cls;
 
-    if (strcmp(url, HEALTH_PATH) == 0) {
-        if (strcmp(method, "GET") != 0) {
-            return send_json(connection, MHD_HTTP_METHOD_NOT_ALLOWED,
-                             "{\"error\":\"Method not allowed\"}");
-        }
-        return send_json(connection, MHD_HTTP_OK, "{\"status\":\"ok\"}");
+    body = malloc(BODY_SIZE);
+    if (body == NULL) {
+        return send_json(connection, 500, "{\"error\":\"memória insuficiente\"}");
     }
+    body[0] = '\0';
 
-    return send_json(connection, MHD_HTTP_NOT_FOUND, "{\"error\":\"Not found\"}");
+    if (server->route(server->cls, method, url, body, BODY_SIZE, &status) != 0) {
+        status = 500;
+        snprintf(body, BODY_SIZE, "%s", "{\"error\":\"erro interno\"}");
+    }
+    body[BODY_SIZE - 1] = '\0';
+
+    ret = send_json(connection, status, body);
+    free(body);
+    return ret;
 }
 
-int http_server_start(HttpServer **out, uint16_t port, char *error, size_t error_size)
+int http_server_start(HttpServer **out, uint16_t port, HttpRouteFn route, void *cls,
+                      char *error, size_t error_size)
 {
     HttpServer *server;
     struct MHD_Daemon *daemon;
 
-    if (out == NULL) {
-        set_error(error, error_size, "ponteiro de saída nulo");
+    if (out == NULL || route == NULL) {
+        set_error(error, error_size, "argumentos inválidos");
         return -1;
     }
     *out = NULL;
@@ -74,17 +87,18 @@ int http_server_start(HttpServer **out, uint16_t port, char *error, size_t error
         set_error(error, error_size, "memória insuficiente");
         return -1;
     }
+    server->route = route;
+    server->cls = cls;
 
     daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, port, NULL, NULL,
-                              &handle_request, NULL, MHD_OPTION_END);
+                              &handle_request, server, MHD_OPTION_END);
     if (daemon == NULL) {
+        char message[128];
+
         free(server);
-        {
-            char message[128];
-            snprintf(message, sizeof message, "não foi possível abrir a porta %u",
-                     (unsigned int)port);
-            set_error(error, error_size, message);
-        }
+        snprintf(message, sizeof message, "não foi possível abrir a porta %u",
+                 (unsigned int)port);
+        set_error(error, error_size, message);
         return -1;
     }
 
