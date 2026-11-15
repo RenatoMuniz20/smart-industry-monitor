@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Testes do cliente de consulta ao InterSCity (SIM-06.2).
+"""Testes do cliente de consulta ao InterSCity (SIM-06.2 e 06.4).
 
 Sobe um InterSCity falso em 127.0.0.1 e roda o driver C contra ele.
 Não acessa a instância da UFMA.
@@ -36,6 +36,25 @@ FIXTURE_OK = {
     ]
 }
 
+# Histórico com duplicatas e fora de ordem, como o InterSCity devolve.
+FIXTURE_HIST = {
+    "resources": [
+        {
+            "uuid": UUID_A,
+            "capabilities": {
+                "sim_operating_state": [{"value": "IDLE", "date": "2024-01-01T00:24:00.000Z"}],
+                "sim_motor_temperature": [
+                    {"value": 42.01, "date": "2024-01-01T00:43:00.000Z"},
+                    {"value": 49.08, "date": "2024-01-01T00:24:00.000Z"},
+                    {"value": 42.01, "date": "2024-01-01T00:43:00.000Z"},
+                    {"value": 49.08, "date": "2024-01-01T00:24:00.000Z"},
+                ],
+                "sim_failure_within_24h": [{"value": 0, "date": "2024-01-01T00:24:00.000Z"}],
+            },
+        }
+    ]
+}
+
 RECEIVED = []  # (caminho, corpo) de cada POST recebido
 
 
@@ -48,21 +67,28 @@ class FakeInterscity(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode()
         RECEIVED.append((self.path, body))
 
-        prefix, sep, rest = self.path.partition(LAST_PATH)
-        if sep == "" or rest != "":
-            self._reply(404, '{"error":"Not found"}')
-            return
-        scenario = prefix.lstrip("/")
-        if scenario == "ok":
-            self._reply(200, json.dumps(FIXTURE_OK))
-        elif scenario == "http500":
-            self._reply(500, '{"error":"boom"}')
-        elif scenario == "badjson":
-            self._reply(200, "isto não é json")
-        elif scenario == "empty":
-            self._reply(200, '{"resources":[]}')
+        if self.path.endswith(LAST_PATH):
+            scenario = self.path[: -len(LAST_PATH)].lstrip("/")
+            if scenario == "ok":
+                self._reply(200, json.dumps(FIXTURE_OK))
+            elif scenario == "http500":
+                self._reply(500, '{"error":"boom"}')
+            elif scenario == "badjson":
+                self._reply(200, "isto não é json")
+            elif scenario == "empty":
+                self._reply(200, '{"resources":[]}')
+            else:
+                self._reply(404, '{"error":"Unknown scenario"}')
+        elif "/collector/resources/" in self.path and self.path.endswith("/data"):
+            scenario = self.path.split("/collector/resources/")[0].lstrip("/")
+            if scenario == "hist":
+                self._reply(200, json.dumps(FIXTURE_HIST))
+            elif scenario == "histnone":
+                self._reply(404, '{"error":"Resource not found"}')
+            else:
+                self._reply(404, '{"error":"Unknown scenario"}')
         else:
-            self._reply(404, '{"error":"Unknown scenario"}')
+            self._reply(404, '{"error":"Not found"}')
 
     def _reply(self, status, text):
         data = text.encode()
@@ -95,10 +121,16 @@ def main():
         print(result.stderr, end="", file=sys.stderr)
     assert result.returncode == 0, f"driver terminou com código {result.returncode}"
 
-    expected_body = json.dumps({"uuids": [UUID_A, UUID_B]}, separators=(",", ":"))
-    paths_bodies = [(p, json.loads(b)) for p, b in RECEIVED if p.endswith(LAST_PATH)]
-    assert ("/ok" + LAST_PATH, {"uuids": [UUID_A, UUID_B]}) in paths_bodies, paths_bodies
-    print("PASS: corpo enviado = " + expected_body)
+    last_bodies = [(p, json.loads(b)) for p, b in RECEIVED if p.endswith(LAST_PATH)]
+    assert ("/ok" + LAST_PATH, {"uuids": [UUID_A, UUID_B]}) in last_bodies, last_bodies
+    print("PASS: corpo do /data/last = uuids das duas máquinas")
+
+    hist_bodies = [(p, json.loads(b)) for p, b in RECEIVED
+                   if p.startswith("/hist/collector/resources/")]
+    assert hist_bodies, RECEIVED
+    assert hist_bodies[0][1] == {"start_date": "2024-01-01T00:00:00",
+                                 "end_date": "2024-01-01T01:00:00"}, hist_bodies[0]
+    print("PASS: corpo do histórico = start_date e end_date em UTC")
     print("test_interscity_query.py: todos os testes passaram.")
     return 0
 

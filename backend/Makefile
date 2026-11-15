@@ -25,6 +25,7 @@ test: $(BIN) $(TEST_QUERY)
 	python3 -B tests/test_backend.py $(BIN)
 	python3 -B tests/test_interscity_query.py $(TEST_QUERY)
 	python3 -B tests/test_machines_latest.py $(BIN)
+	python3 -B tests/test_machines_history.py $(BIN)
 
 clean:
 	rm -rf $(BUILD)

@@ -8,7 +8,10 @@
 #include <string.h>
 
 #define HEALTH_PATH "/api/health"
+#define MACHINES_PATH "/api/machines"
+#define MACHINES_PREFIX "/api/machines/"
 #define LATEST_PATH "/api/machines/latest"
+#define HISTORY_SUFFIX "/history"
 
 /* Escritor com controle de estouro: nunca escreve além de `cap`. */
 typedef struct {
@@ -118,11 +121,71 @@ static void w_sample(Writer *w, const char *name, const IsqSample *s, int textua
     w_char(w, '}');
 }
 
+static void w_series(Writer *w, const char *name, const IsqSeries *s, int textual)
+{
+    w_printf(w, "\"%s\":[", name);
+    for (size_t i = 0; i < s->count; i++) {
+        if (i > 0) {
+            w_char(w, ',');
+        }
+        w_raw(w, "{\"timestamp\":");
+        w_json_string(w, s->items[i].date);
+        w_raw(w, ",\"value\":");
+        if (textual) {
+            w_json_string(w, s->items[i].text);
+        } else {
+            w_number(w, s->items[i].number);
+        }
+        w_char(w, '}');
+    }
+    w_char(w, ']');
+}
+
 static void fail_body(char *body, size_t body_size, unsigned int *status,
                       unsigned int code, const char *message)
 {
     *status = code;
     snprintf(body, body_size, "{\"error\":\"%s\"}", message);
+}
+
+static const MachineEntry *find_machine(const RouteContext *ctx, long id)
+{
+    for (size_t i = 0; i < ctx->machine_count; i++) {
+        if (ctx->machines[i].machine_id == id) {
+            return &ctx->machines[i];
+        }
+    }
+    return NULL;
+}
+
+static void handle_health(char *body, size_t body_size, unsigned int *status)
+{
+    *status = 200;
+    snprintf(body, body_size, "%s", "{\"status\":\"ok\"}");
+}
+
+static void handle_list(const RouteContext *ctx, char *body, size_t body_size,
+                        unsigned int *status)
+{
+    Writer w = {body, body_size, 0, 0};
+
+    body[0] = '\0';
+    w_raw(&w, "{\"machines\":[");
+    for (size_t i = 0; i < ctx->machine_count; i++) {
+        if (i > 0) {
+            w_char(&w, ',');
+        }
+        w_printf(&w, "{\"machine_id\":%d,\"uuid\":", ctx->machines[i].machine_id);
+        w_json_string(&w, ctx->machines[i].uuid);
+        w_char(&w, '}');
+    }
+    w_raw(&w, "]}");
+
+    if (w.overflow) {
+        fail_body(body, body_size, status, 500, "resposta grande demais");
+    } else {
+        *status = 200;
+    }
 }
 
 static void build_machines(Writer *w, const RouteContext *ctx,
@@ -212,30 +275,128 @@ static void handle_latest(const RouteContext *ctx, char *body, size_t body_size,
     free(results);
 }
 
-int routes_handle(void *cls, const char *method, const char *url,
-                  char *body, size_t body_size, unsigned int *status)
+static void handle_history(const RouteContext *ctx, const HttpRequest *req,
+                           const MachineEntry *m, char *body, size_t body_size,
+                           unsigned int *status)
 {
-    const RouteContext *ctx = cls;
+    const char *start = req->arg(req, "start");
+    const char *end = req->arg(req, "end");
+    IsqHistory h;
+    char err[256];
+    Writer w;
 
-    if (ctx == NULL || body == NULL || body_size == 0 || status == NULL) {
-        return -1;
+    if (start == NULL || end == NULL) {
+        fail_body(body, body_size, status, 400,
+                  "informe start e end no formato AAAA-MM-DDTHH:MM:SS (UTC)");
+        return;
+    }
+    if (!interscity_datetime_is_valid(start) || !interscity_datetime_is_valid(end)) {
+        fail_body(body, body_size, status, 400,
+                  "start e end devem estar no formato AAAA-MM-DDTHH:MM:SS (UTC)");
+        return;
+    }
+    if (strcmp(start, end) > 0) {
+        fail_body(body, body_size, status, 400, "start não pode ser posterior a end");
+        return;
     }
 
+    if (interscity_query_history(ctx->interscity_url, ctx->interscity_timeout_ms,
+                                 m->uuid, start, end, &h, err, sizeof err) != 0) {
+        fprintf(stderr, "erro ao consultar o histórico no InterSCity: %s\n", err);
+        fail_body(body, body_size, status, 502, "falha ao consultar o InterSCity");
+        return;
+    }
+
+    w.buf = body;
+    w.cap = body_size;
+    w.len = 0;
+    w.overflow = 0;
+    body[0] = '\0';
+
+    w_printf(&w, "{\"machine_id\":%d,\"uuid\":", m->machine_id);
+    w_json_string(&w, m->uuid);
+    w_raw(&w, ",\"start\":");
+    w_json_string(&w, start);
+    w_raw(&w, ",\"end\":");
+    w_json_string(&w, end);
+    w_raw(&w, ",\"series\":{");
+    w_series(&w, "operating_state", &h.operating_state, 1);
+    w_char(&w, ',');
+    w_series(&w, "motor_temperature", &h.motor_temperature, 0);
+    w_char(&w, ',');
+    w_series(&w, "current", &h.current, 0);
+    w_char(&w, ',');
+    w_series(&w, "failure_within_24h", &h.failure_within_24h, 0);
+    w_raw(&w, "}}");
+
+    interscity_history_free(&h);
+
+    if (w.overflow) {
+        fail_body(body, body_size, status, 413, "intervalo grande demais; reduza o período");
+    } else {
+        *status = 200;
+    }
+}
+
+int routes_handle(void *cls, const HttpRequest *req, char *body, size_t body_size,
+                  unsigned int *status)
+{
+    const RouteContext *ctx = cls;
+    const char *url;
+    const char *rest;
+    char *end = NULL;
+    long id;
+    const MachineEntry *m;
+
+    if (ctx == NULL || req == NULL || body == NULL || body_size == 0 || status == NULL) {
+        return -1;
+    }
+    url = req->url;
+    int is_get = strcmp(req->method, "GET") == 0;
+
     if (strcmp(url, HEALTH_PATH) == 0) {
-        if (strcmp(method, "GET") != 0) {
-            fail_body(body, body_size, status, 405, "Method not allowed");
+        if (is_get) {
+            handle_health(body, body_size, status);
         } else {
-            *status = 200;
-            snprintf(body, body_size, "%s", "{\"status\":\"ok\"}");
+            fail_body(body, body_size, status, 405, "Method not allowed");
+        }
+        return 0;
+    }
+
+    if (strcmp(url, MACHINES_PATH) == 0) {
+        if (is_get) {
+            handle_list(ctx, body, body_size, status);
+        } else {
+            fail_body(body, body_size, status, 405, "Method not allowed");
         }
         return 0;
     }
 
     if (strcmp(url, LATEST_PATH) == 0) {
-        if (strcmp(method, "GET") != 0) {
-            fail_body(body, body_size, status, 405, "Method not allowed");
-        } else {
+        if (is_get) {
             handle_latest(ctx, body, body_size, status);
+        } else {
+            fail_body(body, body_size, status, 405, "Method not allowed");
+        }
+        return 0;
+    }
+
+    if (strncmp(url, MACHINES_PREFIX, strlen(MACHINES_PREFIX)) == 0) {
+        rest = url + strlen(MACHINES_PREFIX);
+        id = strtol(rest, &end, 10);
+        if (end == rest || strcmp(end, HISTORY_SUFFIX) != 0) {
+            fail_body(body, body_size, status, 404, "Not found");
+            return 0;
+        }
+        m = find_machine(ctx, id);
+        if (m == NULL) {
+            fail_body(body, body_size, status, 404, "máquina não encontrada");
+            return 0;
+        }
+        if (is_get) {
+            handle_history(ctx, req, m, body, body_size, status);
+        } else {
+            fail_body(body, body_size, status, 405, "Method not allowed");
         }
         return 0;
     }
