@@ -15,6 +15,7 @@ from test_mqtt_integration import listener, terminate
 
 GATEWAY = os.environ.get('SIM_GATEWAY_TEST', './build/iot-gateway')
 READY = 'Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).'
+RECONNECTED = 'MQTT reconectado: assinatura renovada.'
 PREFIX = 'Telemetria válida: '
 
 
@@ -44,6 +45,18 @@ def wait_for(process, condition, diagnostic):
         time.sleep(.02)
 
 
+def wait_for_port(broker, port, root):
+    deadline = time.monotonic() + 10
+    while True:
+        assert broker.poll() is None, (root / 'broker.log').read_text()
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=.1):
+                return
+        except OSError:
+            assert time.monotonic() < deadline
+            time.sleep(.02)
+
+
 @contextmanager
 def temporary_broker(root):
     with listener() as reserved:
@@ -53,18 +66,18 @@ def temporary_broker(root):
     with (root / 'broker.log').open('w') as log:
         broker = subprocess.Popen(['mosquitto', '-c', str(config)], stdout=log, stderr=log)
         try:
-            deadline = time.monotonic() + 10
-            while True:
-                assert broker.poll() is None, (root / 'broker.log').read_text()
-                try:
-                    with socket.create_connection(('127.0.0.1', port), timeout=.1):
-                        break
-                except OSError:
-                    assert time.monotonic() < deadline
-                    time.sleep(.02)
+            wait_for_port(broker, port, root)
             yield broker, port
         finally:
             terminate(broker)
+
+
+def start_broker(root, port):
+    """Starts a new broker with the same configuration (same port) after a stop."""
+    broker = subprocess.Popen(['mosquitto', '-c', str(root / 'mosquitto.conf')],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    wait_for_port(broker, port, root)
+    return broker
 
 
 def publish(port, payload):
@@ -122,16 +135,33 @@ def integration_tests():
                         elif mode == 'sigterm':
                             process.send_signal(signal.SIGTERM)
                         else:
+                            # Broker goes away: the Gateway stays alive and reconnects.
                             terminate(broker)
+                            wait_for(process, lambda: 'Erro MQTT ao receber:' in errors.read_text(), diagnostic)
+                            assert process.poll() is None, diagnostic()
+                            restarted = start_broker(root, port)
+                            try:
+                                wait_for(process, lambda: RECONNECTED in output.read_text(), diagnostic)
+                                after = {'machine_id': 1, 'machine_type': 'CNC',
+                                         'timestamp': '2024-01-01 00:05:00', 'temperature': 50.0,
+                                         'current': 5.0, 'power': None, 'state': 'NORMAL',
+                                         'failure_within_24h': 0}
+                                publish(port, json.dumps(after).encode())
+                                wait_for(process, lambda: any(line.startswith(PREFIX) for line in
+                                         output.read_text().splitlines()), diagnostic)
+                                logged = [line for line in output.read_text().splitlines()
+                                          if line.startswith(PREFIX)]
+                                assert json.loads(logged[-1][len(PREFIX):]) == after, diagnostic()
+                            finally:
+                                terminate(restarted)
+                            process.send_signal(signal.SIGTERM)
                         code = process.wait(timeout=10)
+                        assert code == 0, diagnostic()
+                        assert output.read_text().splitlines()[-1] == 'Gateway encerrado por solicitação.'
                         if mode == 'network-error':
-                            assert code != 0 and 'Erro MQTT ao receber:' in errors.read_text(), diagnostic()
-                            assert 'Gateway encerrado por solicitação.' not in output.read_text()
-                        else:
-                            assert code == 0, diagnostic()
-                            assert output.read_text().splitlines()[-1] == 'Gateway encerrado por solicitação.'
-                            if mode == 'sigterm':
-                                assert errors.read_text() == ''
+                            assert 'Erro MQTT ao receber:' in errors.read_text(), diagnostic()
+                        if mode == 'sigterm':
+                            assert errors.read_text() == ''
                         assert not Path(f'/proc/{process.pid}').exists()
                     finally:
                         terminate(process)

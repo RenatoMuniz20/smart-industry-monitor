@@ -10,17 +10,37 @@
 #include <json-c/json.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#define TIMESTAMP_TEXT INTERSCITY_CLIENT_TIMESTAMP_CAPACITY /* AAAA-MM-DDTHH:MM:SS + NUL */
+#define RECONNECT_FIRST_MS 1000u   /* first pause after losing the broker */
+#define RECONNECT_MAX_MS 30000u    /* pause never grows beyond this */
+#define CONSULT_WAIT_MS 2000u      /* time for the Adaptor -> Data Collector path to store */
 
 static volatile sig_atomic_t stop_requested;
+
+/* Last timestamp delivered per machine in this run (dedupe is in memory only). */
+typedef struct {
+    int machine_id;
+    char last[TIMESTAMP_TEXT];
+} DeliveredEntry;
 
 typedef struct {
     int log_failed;
     InterscityClient *interscity;      /* NULL: no forwarding, SIM-04 behavior */
     const InterscityMapping *mapping;
-    unsigned long sent;
+    unsigned long sent;                /* confirmed by HTTP 201 or by the Data Collector */
     unsigned long failed;
     unsigned long unmapped;
+    unsigned long duplicates;          /* skipped: timestamp already delivered */
+    unsigned long recovered;           /* ambiguous failure, but the Data Collector had it */
+    unsigned long resent;              /* ambiguous failure, not stored: sent once more */
+    unsigned long reconnects;
+    DeliveredEntry *delivered;
+    size_t delivered_count;
+    size_t delivered_capacity;
 } GatewayContext;
 
 /* Static because of its size (about 45 KB); loaded once before MQTT starts. */
@@ -92,10 +112,87 @@ done:
     return result;
 }
 
-/* Sends one validated telemetry to the InterSCity Resource Adaptor. Failures are
- * logged to stderr and never stop the Gateway; nothing is retried (POST is not
- * idempotent). The MQTT message was already acknowledged to the broker, so a
- * failed sample is lost: a documented limitation of this stage.
+/* Pause that stops early when a stop is requested (checked every 50 ms). */
+static void sleep_ms(unsigned milliseconds)
+{
+    while (milliseconds > 0 && !stop_requested) {
+        unsigned step = milliseconds < 50 ? milliseconds : 50;
+        struct timespec nap = {0, (long)step * 1000000L};
+        nanosleep(&nap, NULL);
+        milliseconds -= step;
+    }
+}
+
+/* "AAAA-MM-DD HH:MM:SS" or "AAAA-MM-DDTHH:MM:SS", already validated by the
+ * payload builder, becomes "AAAA-MM-DDTHH:MM:SS" so that strcmp orders samples.
+ */
+static void normalize_timestamp(const char *in, char out[TIMESTAMP_TEXT])
+{
+    memcpy(out, in, 19);
+    out[10] = 'T';
+    out[19] = '\0';
+}
+
+static const char *last_delivered(const GatewayContext *app, int machine_id)
+{
+    for (size_t i = 0; i < app->delivered_count; ++i) {
+        if (app->delivered[i].machine_id == machine_id) return app->delivered[i].last;
+    }
+    return NULL;
+}
+
+static int remember_delivered(GatewayContext *app, int machine_id, const char *timestamp)
+{
+    for (size_t i = 0; i < app->delivered_count; ++i) {
+        if (app->delivered[i].machine_id == machine_id) {
+            memcpy(app->delivered[i].last, timestamp, TIMESTAMP_TEXT);
+            return 0;
+        }
+    }
+    if (app->delivered_count == app->delivered_capacity) {
+        size_t capacity = app->delivered_capacity != 0 ? app->delivered_capacity * 2 : 16;
+        DeliveredEntry *grown = realloc(app->delivered, capacity * sizeof *grown);
+        if (grown == NULL) return -1;
+        app->delivered = grown;
+        app->delivered_capacity = capacity;
+    }
+    DeliveredEntry *entry = &app->delivered[app->delivered_count++];
+    entry->machine_id = machine_id;
+    memcpy(entry->last, timestamp, TIMESTAMP_TEXT);
+    return 0;
+}
+
+static void report_delivery(GatewayContext *app, const GatewayTelemetry *t,
+                            const char *timestamp, const InterscityClientResult *result)
+{
+    app->sent++;
+    if (remember_delivered(app, t->machine_id, timestamp) != 0) app->log_failed = 1;
+    if (printf("InterSCity: machine_id=%d enviada (HTTP %ld, %ld ms, conexão %s).\n",
+               t->machine_id, result->http_status, result->elapsed_ms,
+               result->new_connection ? "nova" : "reutilizada") < 0 || fflush(stdout) != 0) {
+        app->log_failed = 1;
+    }
+}
+
+static void report_post_failure(GatewayContext *app, const GatewayTelemetry *t,
+                                InterscityClientError error, const InterscityClientResult *result)
+{
+    if (fprintf(stderr, "InterSCity: machine_id=%d falhou: %s (HTTP %ld, %ld ms).\n",
+                t->machine_id, interscity_client_error_string(error), result->http_status,
+                result->elapsed_ms) < 0) app->log_failed = 1;
+}
+
+/* Sends one validated telemetry to the InterSCity Resource Adaptor.
+ *
+ * - HTTP 201: delivered.
+ * - Other HTTP status: definite refusal, logged, not resent.
+ * - Timeout or network error: ambiguous. The Adaptor may have accepted the
+ *   sample, so the Data Collector is consulted after a pause. Only if it does
+ *   not have the sample is the POST sent once more. If the consultation itself
+ *   fails, nothing is resent.
+ *
+ * A sample already delivered in this run (same machine, same or older
+ * timestamp) is skipped. Failures never stop the Gateway.
  */
 static void forward_to_interscity(GatewayContext *app, const GatewayTelemetry *t)
 {
@@ -115,21 +212,63 @@ static void forward_to_interscity(GatewayContext *app, const GatewayTelemetry *t
                     interscity_payload_error_string(payload_error)) < 0) app->log_failed = 1;
         return;
     }
-    InterscityClientResult result;
-    InterscityClientError error = INTERSCITY_CLIENT_OK;
-    if (interscity_client_post_data(app->interscity, uuid, body, length, &result, &error) != 0) {
-        app->failed++;
-        if (fprintf(stderr, "InterSCity: machine_id=%d falhou: %s (HTTP %ld, %ld ms).\n",
-                    t->machine_id, interscity_client_error_string(error), result.http_status,
-                    result.elapsed_ms) < 0) app->log_failed = 1;
+    char timestamp[TIMESTAMP_TEXT];
+    normalize_timestamp(t->timestamp, timestamp);
+    const char *last = last_delivered(app, t->machine_id);
+    if (last != NULL && strcmp(timestamp, last) <= 0) {
+        app->duplicates++;
+        if (printf("InterSCity: machine_id=%d ignorada (ts %s já enviado).\n", t->machine_id,
+                   timestamp) < 0 || fflush(stdout) != 0) app->log_failed = 1;
         return;
     }
-    app->sent++;
-    if (printf("InterSCity: machine_id=%d enviada (HTTP %ld, %ld ms, conexão %s).\n",
-               t->machine_id, result.http_status, result.elapsed_ms,
-               result.new_connection ? "nova" : "reutilizada") < 0 || fflush(stdout) != 0) {
-        app->log_failed = 1;
+
+    InterscityClientResult result = {0, 0, 0};
+    InterscityClientError error = INTERSCITY_CLIENT_OK;
+    if (interscity_client_post_data(app->interscity, uuid, body, length, &result, &error) == 0) {
+        report_delivery(app, t, timestamp, &result);
+        return;
     }
+    if (!interscity_client_is_ambiguous(error)) {
+        app->failed++;
+        report_post_failure(app, t, error, &result);
+        return;
+    }
+
+    /* Ambiguous: the Adaptor may already have published this sample. */
+    if (fprintf(stderr, "InterSCity: machine_id=%d sem resposta (%s); consultando o Data "
+                "Collector antes de qualquer reenvio.\n", t->machine_id,
+                interscity_client_error_string(error)) < 0) app->log_failed = 1;
+    sleep_ms(CONSULT_WAIT_MS);
+
+    int found = 0;
+    char stored[TIMESTAMP_TEXT];
+    InterscityClientError consult_error = INTERSCITY_CLIENT_OK;
+    if (interscity_client_last_timestamp(app->interscity, uuid, stored, sizeof stored,
+                                         &found, &consult_error) != 0) {
+        app->failed++;
+        if (fprintf(stderr, "InterSCity: machine_id=%d não confirmada (consulta falhou: %s); "
+                    "não reenviada.\n", t->machine_id,
+                    interscity_client_error_string(consult_error)) < 0) app->log_failed = 1;
+        return;
+    }
+    if (found && strcmp(stored, timestamp) >= 0) {
+        /* No HTTP response was received for the POST, so no "enviada" line here. */
+        app->sent++;
+        app->recovered++;
+        if (remember_delivered(app, t->machine_id, timestamp) != 0) app->log_failed = 1;
+        if (printf("InterSCity: machine_id=%d confirmada pelo Data Collector; não reenviada.\n",
+                   t->machine_id) < 0 || fflush(stdout) != 0) app->log_failed = 1;
+        return;
+    }
+
+    app->resent++;
+    InterscityClientResult again = {0, 0, 0};
+    if (interscity_client_post_data(app->interscity, uuid, body, length, &again, &error) == 0) {
+        report_delivery(app, t, timestamp, &again);
+        return;
+    }
+    app->failed++;
+    report_post_failure(app, t, error, &again);
 }
 
 static void receive_message(const char *topic, const void *payload, size_t length, void *context)
@@ -150,6 +289,37 @@ static void receive_message(const char *topic, const void *payload, size_t lengt
         return;
     }
     if (app->interscity != NULL) forward_to_interscity(app, &telemetry);
+}
+
+/* Reconnects with exponential pause (1 s, 2 s, ... up to 30 s) until the broker
+ * accepts the subscription again, a stop is requested, or logging fails. The
+ * broker does not keep messages for a client that was away (clean session), so
+ * samples published during the outage are lost; this is documented.
+ */
+static int reconnect_mqtt(GatewayContext *app, MqttSubscriber **subscriber, const char *host,
+                          int port, const char *client_id, int timeout_ms)
+{
+    unsigned delay_ms = RECONNECT_FIRST_MS;
+    while (!stop_requested && !app->log_failed) {
+        sleep_ms(delay_ms);
+        if (stop_requested) return 0;
+        if (mqtt_subscriber_connect(subscriber, host, port, client_id, timeout_ms,
+                                    receive_message, app) == 0) {
+            app->reconnects++;
+            if (puts("MQTT reconectado: assinatura renovada.") < 0 || fflush(stdout) != 0) {
+                app->log_failed = 1;
+                return 0;
+            }
+            return 1;
+        }
+        unsigned next_ms = delay_ms * 2 > RECONNECT_MAX_MS ? RECONNECT_MAX_MS : delay_ms * 2;
+        if (fprintf(stderr, "Erro MQTT ao reconectar: %s. Nova tentativa em %u ms.\n",
+                    mqtt_subscriber_error_string(mqtt_subscriber_last_error()), next_ms) < 0) {
+            app->log_failed = 1;
+        }
+        delay_ms = next_ms;
+    }
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -255,13 +425,13 @@ int main(int argc, char **argv)
     while (!stop_requested && !app.log_failed) {
         int rc = mqtt_subscriber_poll(subscriber, 250);
         if (stop_requested) break;
-        if (rc != 0) {
-            /* Capture before close overwrites the process-local diagnostic. */
-            MqttSubscriberError error = mqtt_subscriber_last_error();
-            fprintf(stderr, "Erro MQTT ao receber: %s.\n", mqtt_subscriber_error_string(error));
-            result = 1;
-            break;
-        }
+        if (rc == 0) continue;
+        /* Capture before close overwrites the process-local diagnostic. */
+        MqttSubscriberError error = mqtt_subscriber_last_error();
+        if (fprintf(stderr, "Erro MQTT ao receber: %s. Reconectando.\n",
+                    mqtt_subscriber_error_string(error)) < 0) app.log_failed = 1;
+        mqtt_subscriber_close(&subscriber); /* the broken session is discarded */
+        if (!reconnect_mqtt(&app, &subscriber, host, port, client_id, timeout_ms)) break;
     }
     if (app.log_failed) result = 1;
     if (mqtt_subscriber_close(&subscriber) != 0) {
@@ -271,9 +441,13 @@ int main(int argc, char **argv)
     }
     if (app.interscity != NULL) {
         if (printf("InterSCity: %lu enviadas, %lu falhas, %lu sem mapeamento.\n",
-                   app.sent, app.failed, app.unmapped) < 0 || fflush(stdout) != 0) result = 1;
+                   app.sent, app.failed, app.unmapped) < 0 ||
+            printf("InterSCity: %lu duplicadas ignoradas, %lu confirmadas pelo Data Collector, "
+                   "%lu reenviadas.\n", app.duplicates, app.recovered, app.resent) < 0 ||
+            fflush(stdout) != 0) result = 1;
         interscity_client_destroy(&app.interscity);
     }
+    free(app.delivered);
     if (stop_requested && result == 0) {
         if (puts("Gateway encerrado por solicitação.") < 0 || fflush(stdout) != 0) result = 1;
     }

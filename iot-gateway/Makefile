@@ -49,10 +49,10 @@ $(PAYLOAD_TEST_TARGET): tests/test_interscity_payload.c $(PAYLOAD_TARGET) includ
 	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_payload.c $(PAYLOAD_TARGET) $(JSON_LDLIBS) $(LDLIBS)
 
 $(CLIENT_TARGET): src/interscity_client.c include/interscity_client.h Makefile | build
-	$(CC) $(CPPFLAGS) $(CURL_CPPFLAGS) $(CFLAGS) -c -o $@ src/interscity_client.c
+	$(CC) $(CPPFLAGS) $(CURL_CPPFLAGS) $(JSON_CPPFLAGS) $(CFLAGS) -c -o $@ src/interscity_client.c
 
 $(CLIENT_TEST_TARGET): tests/test_interscity_client.c $(CLIENT_TARGET) include/interscity_client.h Makefile | build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_client.c $(CLIENT_TARGET) $(CURL_LDLIBS) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_client.c $(CLIENT_TARGET) $(CURL_LDLIBS) $(JSON_LDLIBS) $(LDLIBS)
 
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
