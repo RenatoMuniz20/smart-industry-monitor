@@ -380,3 +380,105 @@ e o mapeamento real do repositório, sem broker). `make test-mqtt` executa tamb�
 e Gateway real, conferindo o corpo de cada envio, a omissão de medição ausente,
 o reuso da conexão, máquina sem mapeamento, resposta 500 e continuidade após
 falhas. Nenhum teste automatizado acessa a instância real do LSDi.
+
+## Fila durável SQLite — SIM-09.1 (módulo isolado)
+
+`telemetry_queue.h`/`telemetry_queue.c` implementam somente persistência local,
+sem chamadas ou dependências de MQTT, HTTP, libmosquitto ou libcurl. Nenhum
+comportamento da SIM-08 é substituído nesta etapa. Não existe opção de CLI,
+thread HTTP ou uso da fila no callback MQTT. `make all` compila o objeto da
+fila, mas o executável Gateway mantém seu vínculo e comportamento anteriores.
+
+A dependência é SQLite, com funções JSON habilitadas (builds padrão 3.38+),
+obtida via `pkg-config sqlite3`. A implementação foi validada com SQLite 3.54.0.
+No Arch Linux, o pacote é `sqlite`. Para compilar e executar os testes:
+
+```sh
+pkg-config --modversion sqlite3
+make -C iot-gateway all
+make -C iot-gateway test
+```
+
+O teste C usa diretórios temporários em `/tmp`, remove bancos e verifica que
+arquivos WAL/SHM não permaneceram após fechar as conexões. Não usa dados reais
+nem requer broker para os casos SQLite. Os demais testes do alvo são mantidos.
+
+### Esquema e API
+
+`telemetry_queue` contém `id INTEGER PRIMARY KEY AUTOINCREMENT`, `machine_id`,
+`timestamp`, `uuid`, `payload_json`, `status`, `attempt_count`, `last_error` e
+`created_at`, com unicidade `(machine_id, timestamp)`. O timestamp da amostra
+é normalizado, exatamente `YYYY-MM-DDTHH:MM:SS`, sem atribuição de fuso. Os
+componentes têm os mesmos intervalos básicos do payload da SIM-08; calendário
+completo não é validado. UUID é canônico minúsculo e o payload é um objeto JSON,
+armazenado uma só vez. `created_at` é o instante UTC de inserção gerado pelo
+SQLite, distinto do instante histórico da amostra.
+
+`delivered_cursor` armazena somente `machine_id` (chave primária) e
+`last_timestamp`. Não guarda outra cópia do payload. A deduplicação persistente
+ignora amostras com timestamp menor ou igual ao último confirmado por máquina,
+como a semântica atual da SIM-08. **Não atende à entrega de amostras fora de
+ordem.** Avançar o cursor sobre amostras mais novas não remove automaticamente
+itens antigos já enfileirados; o futuro worker deverá respeitar essa política.
+
+As operações públicas são:
+
+- `telemetry_queue_open`/`telemetry_queue_close`: abertura/inicialização e fechamento.
+- `telemetry_queue_enqueue`/`telemetry_queue_check_duplicate`: inserção pendente
+  atômica e consulta consultiva de duplicatas.
+- `telemetry_queue_peek`: primeiro item não bloqueado por ID de inserção, incluindo
+  `pending` e `inflight`. Não reserva o item nem mantém transação aberta.
+- `telemetry_queue_start_attempt`: apenas `pending` → `inflight`, incrementando
+  uma vez o número de tentativas iniciadas.
+- `telemetry_queue_retry`: apenas `inflight` → `pending`, com erro registrado,
+  para falha transitória cujo resultado já é definitivamente conhecido.
+- `telemetry_queue_block`: `pending` ou `inflight` → `blocked`, com motivo.
+- `telemetry_queue_confirm`: apenas item `inflight`; avança o cursor sem retroceder
+  e remove o registro na mesma transação.
+- `telemetry_queue_cursor`/`telemetry_queue_count`: leitura do cursor e quantidade
+  total ainda não entregue, incluindo pendentes, inflight e bloqueados.
+- `telemetry_queue_item_clear`: libera os textos dinâmicos de um item consultado.
+
+Retornos distintos: `OK`, `DUPLICATE_QUEUED` (qualquer estado na fila),
+`DUPLICATE_DELIVERED` (cursor tem precedência), `EMPTY` e `ERROR`. Cada erro
+pode fornecer um `TelemetryQueueError` com código estendido SQLite e descrição;
+argumentos/estados inválidos também retornam erro. Ausência de item ou transição
+incompatível não é considerada sucesso. Consulte os contratos e assinaturas no
+header. Inicialize o item de saída com `{0}` e limpe-o antes de reutilizar;
+`peek` preserva a saída em erro ou fila vazia. Payload e último erro são cópias
+próprias do item, liberadas com `item_clear`. Os campos de entrada são strings
+terminadas em NUL e são copiados para o banco.
+
+### Durabilidade, concorrência e limites
+
+Cada conexão verifica `journal_mode=WAL`, configura `synchronous=FULL` e usa
+`sqlite3_busy_timeout` de 1000 ms. Bancos em memória são rejeitados, pois não
+ativam WAL. Use banco em armazenamento local compatível com WAL; não se promete
+suporte a sistemas de arquivos de rede. O SQLite deve ser compilado com suporte
+a threads. Um contexto não pode ser compartilhado entre threads: a futura
+thread MQTT e a thread HTTP deverão abrir conexões separadas para o mesmo
+arquivo. O módulo usa `SQLITE_OPEN_NOMUTEX` e não cria threads.
+
+Inserção faz `BEGIN IMMEDIATE`, consulta cursor/duplicata e insere ou retorna
+duplicata, com COMMIT verificado. Confirmação faz `BEGIN IMMEDIATE`, upsert
+monotônico do cursor, DELETE e COMMIT. Qualquer falha tenta ROLLBACK; falha de
+rollback é reportada e invalida a conexão para operações até seu fechamento.
+Os estados usam UPDATEs condicionais atômicos. A aquisição da tentativa é uma
+operação separada da consulta; um segundo chamador que perdeu a disputa recebe
+erro. Nenhuma chamada de rede pode ocorrer dentro dessas transações curtas.
+
+Registros `inflight` sobrevivem ao fechamento/reabertura **sem retornar a
+pending**. Eles representam envio potencialmente ambíguo e terão reconciliação
+na SIM-09.4. Bloqueados continuam persistidos e contados, mas não são retornados
+por `peek`; esta etapa não fornece desbloqueio automático. Não há retries HTTP,
+expiração, limpeza automática, migração de esquema existente incompatível ou
+limite de tamanho da fila além dos limites normais do SQLite/disco.
+
+Os testes cobrem FIFO, duplicatas, estados e tentativas, cursor monotônico,
+reabertura, bloqueio, dois contextos independentes, contenção de escrita,
+argumentos inválidos e falhas SQLite. Triggers de teste interrompem remoção ou
+atualização do cursor e verificam rollback sem confirmação parcial. Fechar e
+reabrir demonstra persistência; não equivale a um teste de perda física de
+energia. Durabilidade depende também das garantias de sincronização do sistema
+operacional e do armazenamento. Falhas de COMMIT/ROLLBACK por I/O real não são
+injetadas nesta etapa; seus retornos são verificados no módulo.

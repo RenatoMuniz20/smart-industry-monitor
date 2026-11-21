@@ -16,10 +16,14 @@ PAYLOAD_TARGET = build/interscity_payload.o
 PAYLOAD_TEST_TARGET = build/test_interscity_payload
 CLIENT_TARGET = build/interscity_client.o
 CLIENT_TEST_TARGET = build/test_interscity_client
+SQLITE_CPPFLAGS = $(shell pkg-config --cflags sqlite3)
+SQLITE_LDLIBS = $(shell pkg-config --libs sqlite3)
+QUEUE_TARGET = build/telemetry_queue.o
+QUEUE_TEST_TARGET = build/test_telemetry_queue
 
 .PHONY: all test test-mqtt test-e2e clean
 
-all: build/iot-gateway
+all: build/iot-gateway $(QUEUE_TARGET)
 
 build/iot-gateway: src/main.c $(TARGET) build/mqtt_subscriber.o $(MAPPING_TARGET) $(PAYLOAD_TARGET) $(CLIENT_TARGET) include/gateway_telemetry.h include/mqtt_subscriber.h include/interscity_mapping.h include/interscity_payload.h include/interscity_client.h Makefile | build
 	$(CC) $(CPPFLAGS) $(JSON_CPPFLAGS) $(MQTT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ src/main.c $(TARGET) build/mqtt_subscriber.o $(MAPPING_TARGET) $(PAYLOAD_TARGET) $(CLIENT_TARGET) $(JSON_LDLIBS) $(MQTT_LDLIBS) $(CURL_LDLIBS) $(LDLIBS)
@@ -54,6 +58,12 @@ $(CLIENT_TARGET): src/interscity_client.c include/interscity_client.h Makefile |
 $(CLIENT_TEST_TARGET): tests/test_interscity_client.c $(CLIENT_TARGET) include/interscity_client.h Makefile | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_interscity_client.c $(CLIENT_TARGET) $(CURL_LDLIBS) $(JSON_LDLIBS) $(LDLIBS)
 
+$(QUEUE_TARGET): src/telemetry_queue.c include/telemetry_queue.h Makefile | build
+	$(CC) $(CPPFLAGS) $(SQLITE_CPPFLAGS) $(CFLAGS) -c -o $@ src/telemetry_queue.c
+
+$(QUEUE_TEST_TARGET): tests/test_telemetry_queue.c $(QUEUE_TARGET) include/telemetry_queue.h Makefile | build
+	$(CC) $(CPPFLAGS) $(SQLITE_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_telemetry_queue.c $(QUEUE_TARGET) $(SQLITE_LDLIBS) $(LDLIBS)
+
 test-mqtt: $(MQTT_TEST_TARGET) build/iot-gateway
 	python3 -B tests/test_mqtt_integration.py
 	python3 -B tests/test_cli.py --mqtt
@@ -63,7 +73,8 @@ test-e2e: build/iot-gateway
 	$(MAKE) -C ../dataset-replayer all
 	python3 -B tests/test_end_to_end.py
 
-test: $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) $(PAYLOAD_TEST_TARGET) $(CLIENT_TEST_TARGET) build/iot-gateway
+test: $(QUEUE_TEST_TARGET) $(TEST_TARGET) $(MQTT_TEST_TARGET) $(MAPPING_TEST_TARGET) $(PAYLOAD_TEST_TARGET) $(CLIENT_TEST_TARGET) build/iot-gateway
+	./$(QUEUE_TEST_TARGET)
 	./$(TEST_TARGET)
 	./$(MQTT_TEST_TARGET)
 	./$(MAPPING_TEST_TARGET)
