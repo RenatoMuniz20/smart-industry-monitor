@@ -384,10 +384,10 @@ falhas. Nenhum teste automatizado acessa a instância real do LSDi.
 ## Fila durável SQLite — SIM-09.1 (módulo isolado)
 
 `telemetry_queue.h`/`telemetry_queue.c` implementam somente persistência local,
-sem chamadas ou dependências de MQTT, HTTP, libmosquitto ou libcurl. Nenhum
-comportamento da SIM-08 é substituído nesta etapa. Não existe opção de CLI,
-thread HTTP ou uso da fila no callback MQTT. `make all` compila o objeto da
-fila, mas o executável Gateway mantém seu vínculo e comportamento anteriores.
+sem chamadas ou dependências de MQTT, HTTP, libmosquitto ou libcurl no módulo.
+A integração opcional do `main.c` com a fila está descrita na SIM-09.2 abaixo.
+`make all` compila e vincula o objeto SQLite ao Gateway; sem `--queue-db`, o
+comportamento da SIM-08 permanece preservado. Não existe thread HTTP.
 
 A dependência é SQLite, com funções JSON habilitadas (builds padrão 3.38+),
 obtida via `pkg-config sqlite3`. A implementação foi validada com SQLite 3.54.0.
@@ -482,3 +482,84 @@ reabrir demonstra persistência; não equivale a um teste de perda física de
 energia. Durabilidade depende também das garantias de sincronização do sistema
 operacional e do armazenamento. Falhas de COMMIT/ROLLBACK por I/O real não são
 injetadas nesta etapa; seus retornos são verificados no módulo.
+
+
+## Recepção MQTT para SQLite — SIM-09.2
+
+Para persistir sem enviar HTTP, habilite explicitamente `--queue-db`:
+
+```sh
+iot-gateway/build/iot-gateway \
+  --interscity-url http://127.0.0.1:8000 \
+  --interscity-map config/interscity/machines.conf \
+  --queue-db ./data/telemetry.db
+```
+
+O diretório do banco deve existir; o programa não cria diretórios. Caminhos
+relativos são resolvidos a partir do diretório atual. Arquivos de banco são
+dados locais e não devem ser versionados. Caminho vazio, opção repetida ou fila
+sem URL e mapa são argumentos inválidos. A URL recebe validação básica local,
+compatível com o contrato atual do cliente direto, sem resolver host ou abrir
+conexões. Ela é exigida como configuração do destino futuro, mas não é
+armazenada em cada registro nem usada para comunicação nesta subetapa.
+`--interscity-timeout-ms` continua validado, mas não é aplicado no modo fila,
+pois nenhum cliente HTTP é criado. Não é necessário InterSCity disponível.
+
+Inicialização: argumentos → mapa validado → banco/esquema aberto → MQTT.
+Falha no mapa ou banco encerra com código 1 antes de consumir mensagens.
+O contexto está completo antes de `mqtt_subscriber_connect`, inclusive para
+callbacks entregues durante a conexão. Logs de habilitação e prontidão:
+
+```text
+Fila SQLite habilitada (10 máquinas mapeadas; sem envios HTTP).
+Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
+```
+
+Cada mensagem mantém a validação e o log `Telemetria válida`. Com a fila ativa,
+o callback consulta o UUID no mapa, constrói o corpo com
+`interscity_payload_build`, normaliza o timestamp pela lógica da SIM-08 e chama
+`telemetry_queue_enqueue` diretamente. Não existe pré-consulta de duplicata:
+a operação SQLite faz a verificação atomicamente. Exemplo de log:
+
+```text
+Fila SQLite: machine_id=1 persistida (ts 2024-01-01T00:00:00, pending).
+Fila SQLite: machine_id=1 duplicata ignorada (ts 2024-01-01T00:00:00, já enfileirada).
+```
+
+Duplicatas podem ser `já enfileirada` (qualquer estado na fila) ou `já confirmada`
+(conforme cursor persistente). Não geram outro registro. Mensagens sem UUID,
+JSON inválido ou falha na construção do payload são diagnosticadas e descartadas
+individualmente, sem armazenar dados não enviáveis. A recepção continua.
+
+Erro de persistência é fatal: stderr recebe código estendido SQLite e mensagem
+escapada; a flag de erro impede callbacks seguintes e interrompe o loop, inclusive
+durante conexão/reconexão. Não registra persistência para a operação que falhou.
+MQTT e SQLite são fechados pelo fluxo principal e o processo retorna 1. SIGINT
+ou SIGTERM normais retornam 0 após o fechamento. A reconexão MQTT da SIM-08
+continua disponível, mas não é usada para tentar contornar uma falha SQLite.
+
+O resumo do modo fila informa somente quantidades desta execução: persistidas,
+duplicatas ignoradas, sem mapeamento e não preparadas. Não informa entrega HTTP
+nem a quantidade total já existente no banco. Novos registros ficam em `pending`,
+com `attempt_count=0`; registros existentes não são enviados, reclamados ou
+reconciliados. A confirmação do cursor somente é simulada como fixture de teste;
+a aplicação não confirma entregas nesta etapa.
+
+**Limite de garantia:** o PUBACK MQTT é gerenciado pela libmosquitto e não é
+atômico com o COMMIT SQLite. QoS 1 não garante redelivery após falha de banco;
+uma amostra pode ser perdida antes de persistir mesmo com erro corretamente
+reportado. Não foi alterado o protocolo MQTT. A gravação e o busy timeout
+SQLite também ocupam o callback síncrono. Permanecem as limitações de fila,
+ordenação e `inflight` descritas acima; não há worker, retries HTTP ou threads.
+
+Sem `--queue-db`, permanecem o envio direto, deduplicação em memória, tratamento
+de timeout com consulta ao Data Collector/reenvio único, reconexão e resumos
+legados; sem URL/mapa, permanece o modo de validação e logging.
+
+`tests/test_durable_queue.py` integra `make test` para CLI/inicialização e
+`make test-mqtt` para recepção real, SQLite temporário e InterSCity falso que
+registra requisições. Cobre três registros pending com campos/corpo conferidos,
+duplicatas, reinicialização, HTTP indisponível e zero requisições HTTP, JSON
+inválido, ID sem mapa, erro de payload, cursor confirmado e erro SQLite fatal
+injetado por trigger. Verifica fechamento por sinais e ausência de WAL/SHM
+residuais. Os testes existentes da SIM-08 não foram modificados.
