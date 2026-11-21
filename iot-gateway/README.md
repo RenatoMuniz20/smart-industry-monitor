@@ -419,7 +419,7 @@ SQLite, distinto do instante histórico da amostra.
 ignora amostras com timestamp menor ou igual ao último confirmado por máquina,
 como a semântica atual da SIM-08. **Não atende à entrega de amostras fora de
 ordem.** Avançar o cursor sobre amostras mais novas não remove automaticamente
-itens antigos já enfileirados; o futuro worker deverá respeitar essa política.
+itens antigos já enfileirados; o worker respeita essa política.
 
 As operações públicas são:
 
@@ -455,8 +455,8 @@ Cada conexão verifica `journal_mode=WAL`, configura `synchronous=FULL` e usa
 `sqlite3_busy_timeout` de 1000 ms. Bancos em memória são rejeitados, pois não
 ativam WAL. Use banco em armazenamento local compatível com WAL; não se promete
 suporte a sistemas de arquivos de rede. O SQLite deve ser compilado com suporte
-a threads. Um contexto não pode ser compartilhado entre threads: a futura
-thread MQTT e a thread HTTP deverão abrir conexões separadas para o mesmo
+a threads. Um contexto não pode ser compartilhado entre threads: a
+thread MQTT e a thread HTTP abrem conexões separadas para o mesmo
 arquivo. O módulo usa `SQLITE_OPEN_NOMUTEX` e não cria threads.
 
 Inserção faz `BEGIN IMMEDIATE`, consulta cursor/duplicata e insere ou retorna
@@ -486,7 +486,7 @@ injetadas nesta etapa; seus retornos são verificados no módulo.
 
 ## Recepção MQTT para SQLite — SIM-09.2
 
-Para persistir sem enviar HTTP, habilite explicitamente `--queue-db`:
+Para habilitar persistência e entrega pelo worker HTTP (SIM-09.3), use `--queue-db`:
 
 ```sh
 iot-gateway/build/iot-gateway \
@@ -500,18 +500,19 @@ relativos são resolvidos a partir do diretório atual. Arquivos de banco são
 dados locais e não devem ser versionados. Caminho vazio, opção repetida ou fila
 sem URL e mapa são argumentos inválidos. A URL recebe validação básica local,
 compatível com o contrato atual do cliente direto, sem resolver host ou abrir
-conexões. Ela é exigida como configuração do destino futuro, mas não é
-armazenada em cada registro nem usada para comunicação nesta subetapa.
-`--interscity-timeout-ms` continua validado, mas não é aplicado no modo fila,
-pois nenhum cliente HTTP é criado. Não é necessário InterSCity disponível.
+conexões. Ela configura o destino do worker e não é armazenada em cada registro.
+`--interscity-timeout-ms` limita cada requisição do worker (padrão 5000 ms).
+InterSCity indisponível não impede persistência MQTT; erro de rede suspende
+as entregas por ser ambíguo, conforme a seção SIM-09.3.
 
-Inicialização: argumentos → mapa validado → banco/esquema aberto → MQTT.
+Inicialização: argumentos → mapa validado → banco/esquema aberto → cliente
+HTTP criado → worker/SQLite próprio inicializado → MQTT.
 Falha no mapa ou banco encerra com código 1 antes de consumir mensagens.
 O contexto está completo antes de `mqtt_subscriber_connect`, inclusive para
 callbacks entregues durante a conexão. Logs de habilitação e prontidão:
 
 ```text
-Fila SQLite habilitada (10 máquinas mapeadas; sem envios HTTP).
+Fila SQLite habilitada (10 máquinas mapeadas; worker HTTP independente).
 Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
 ```
 
@@ -538,19 +539,18 @@ MQTT e SQLite são fechados pelo fluxo principal e o processo retorna 1. SIGINT
 ou SIGTERM normais retornam 0 após o fechamento. A reconexão MQTT da SIM-08
 continua disponível, mas não é usada para tentar contornar uma falha SQLite.
 
-O resumo do modo fila informa somente quantidades desta execução: persistidas,
-duplicatas ignoradas, sem mapeamento e não preparadas. Não informa entrega HTTP
-nem a quantidade total já existente no banco. Novos registros ficam em `pending`,
-com `attempt_count=0`; registros existentes não são enviados, reclamados ou
-reconciliados. A confirmação do cursor somente é simulada como fixture de teste;
-a aplicação não confirma entregas nesta etapa.
+O resumo `Fila SQLite` informa persistências desta execução: persistidas,
+duplicatas ignoradas, sem mapeamento e não preparadas. Um resumo separado
+`Worker HTTP` informa entregas, retentativas, bloqueios e suspensão. Nenhum
+deles representa a quantidade total já existente no banco. Novos registros
+entram como `pending`, com `attempt_count=0`, antes de serem reclamados pelo worker.
 
 **Limite de garantia:** o PUBACK MQTT é gerenciado pela libmosquitto e não é
 atômico com o COMMIT SQLite. QoS 1 não garante redelivery após falha de banco;
 uma amostra pode ser perdida antes de persistir mesmo com erro corretamente
 reportado. Não foi alterado o protocolo MQTT. A gravação e o busy timeout
 SQLite também ocupam o callback síncrono. Permanecem as limitações de fila,
-ordenação e `inflight` descritas acima; não há worker, retries HTTP ou threads.
+ordenação e `inflight` descritas acima. HTTP nunca é executado no callback MQTT.
 
 Sem `--queue-db`, permanecem o envio direto, deduplicação em memória, tratamento
 de timeout com consulta ao Data Collector/reenvio único, reconexão e resumos
@@ -558,8 +558,83 @@ legados; sem URL/mapa, permanece o modo de validação e logging.
 
 `tests/test_durable_queue.py` integra `make test` para CLI/inicialização e
 `make test-mqtt` para recepção real, SQLite temporário e InterSCity falso que
-registra requisições. Cobre três registros pending com campos/corpo conferidos,
-duplicatas, reinicialização, HTTP indisponível e zero requisições HTTP, JSON
+registra requisições. Uma fixture anterior `inflight` suspende o worker para
+isolar os testes de recepção: três registros pending com campos/corpo conferidos,
+duplicatas, reinicialização, HTTP indisponível e ausência de POST durante suspensão, JSON
 inválido, ID sem mapa, erro de payload, cursor confirmado e erro SQLite fatal
 injetado por trigger. Verifica fechamento por sinais e ausência de WAL/SHM
 residuais. Os testes existentes da SIM-08 não foram modificados.
+
+
+## Entrega HTTP independente — SIM-09.3
+
+`delivery_worker.h/.c` mantém um único pthread no modo `--queue-db`. A thread
+principal continua validando MQTT e persistindo com sua conexão SQLite; o worker
+abre, utiliza e fecha outra conexão para o mesmo arquivo. Não se compartilham
+handles SQLite nem o cliente HTTP. `delivery_worker_start` cria o cliente
+libcurl na thread principal **antes** de `pthread_create`, aguarda a abertura do
+SQLite do worker e retorna 0/-1. `delivery_worker_failed` consulta uma flag
+atômica. `delivery_worker_stop` solicita parada, executa `pthread_join`, imprime
+os contadores HTTP e somente então destrói o cliente e seus recursos.
+
+O worker utiliza UUID e JSON já persistidos. `peek` retorna o registro elegível
+mais antigo por ID (bloqueados são ignorados); `start_attempt` faz
+`pending → inflight` e incrementa `attempt_count`. Nenhuma transação permanece
+aberta durante HTTP. O resultado determina a transição:
+
+| Resultado | Ação |
+| --- | --- |
+| HTTP 201 | `confirm`: cursor monotônico e remoção em transação única; só depois registra entrega |
+| HTTP 429 ou 5xx | `retry`: volta a pending com last_error; espera 1, 2, 4, 8, 16, 30 segundos (teto) |
+| Outro status HTTP | `block`: preserva registro e motivo; continua os próximos elegíveis |
+| Timeout/erro de rede | Preserva inflight, registra ambiguidade e suspende todos os envios posteriores |
+| Inflight existente | Registra uma vez e suspende os envios; MQTT continua gravando |
+| Erro local/SQLite | Falha fatal comunicada por flag atômica; processo termina com código 1 |
+
+O contador de retentativas conta retornos a `pending` para nova tentativa;
+pode incluir uma espera interrompida antes do próximo POST.
+Após entrega confirmada o backoff reinicia em 1 segundo. Fila vazia é consultada
+a cada 250 ms; esperas observam parada em fatias de até 50 ms, sem busy waiting.
+A suspensão termina a rotina de envio nesta etapa; não há consulta ao Data
+Collector nem reenvio de resultado ambíguo. O estado inflight permanece no banco
+mesmo após reiniciar. O diagnóstico da ambiguidade fica no log; a API existente
+não altera last_error enquanto mantém inflight. Recuperação pertence à SIM-09.4.
+Apenas um Gateway/worker deve consumir o arquivo: não há protocolo para múltiplos
+consumidores. A URL é global da execução; ao reiniciar, deve apontar ao mesmo
+InterSCity dos UUIDs persistidos.
+
+SIGINT/SIGTERM continuam apenas atualizando a flag do handler. O fluxo principal
+fecha MQTT, solicita parada e aguarda o join antes de fechar o banco principal.
+Uma requisição ativa pode terminar ou alcançar seu timeout: se retornar 201, a
+confirmação SQLite é concluída antes de sair; se ambígua, mantém inflight. O
+limite prático depende do timeout HTTP configurado, acrescido das operações
+SQLite (busy timeout de 1000 ms por operação) e das limitações DNS/TCP síncronas
+já documentadas. Falha na confirmação após HTTP 201 é fatal: não anuncia entrega,
+a transação é revertida e o registro fica recuperável. Não há cancelamento
+abrupto de pthread nem operações complexas nos handlers.
+
+Exemplos de logs (formatos; resultados de testes são emitidos pela suíte):
+
+```text
+Worker HTTP: id=1 machine_id=1 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=2 HTTP 503; pending; nova tentativa em 1000 ms.
+Worker HTTP: id=3 blocked (HTTP 400).
+Worker HTTP: id=4 inflight; aguarda reconciliação; envios suspensos.
+```
+
+`make -C iot-gateway test-mqtt` inclui `tests/test_delivery_worker.py`, com
+Mosquitto, SQLite e HTTP temporários locais. Verifica três entregas FIFO e seus
+payloads/cursor, 503 e 429 com backoff/reset, 400 seguido de entrega, timeout sem
+reenvio, reinicialização inflight, MQTT durante HTTP bloqueado por evento,
+SIGTERM durante sucesso/timeout/backoff e trigger que impede confirmação após
+201 (rollback do cursor e da remoção, sem falso sucesso). Respostas lentas são
+controladas por eventos; todos os processos têm timeout e limpeza em finally.
+Não utiliza o InterSCity real. Os testes de recepção da SIM-09.2 mantêm cobertura
+de validação, payload, persistência, duplicatas e erro SQLite fatal; ausência de
+POST agora é exigida somente quando há uma pendência inflight deliberada.
+
+Sem `--queue-db`, não se cria worker ou conexão SQLite; o fluxo direto da SIM-08,
+seus logs e a consulta ao Data Collector permanecem inalterados. QoS 1 ainda
+admite duplicações e seu ACK não é atômico com persistência. Não há deduplicação
+de envios ambíguos, reconciliação, múltiplos workers ou garantia de persistência
+no Data Collector decorrente apenas do HTTP 201.

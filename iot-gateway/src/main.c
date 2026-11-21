@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "gateway_telemetry.h"
+#include "delivery_worker.h"
 #include "interscity_client.h"
 #include "interscity_mapping.h"
 #include "interscity_payload.h"
@@ -31,6 +32,7 @@ typedef struct {
 typedef struct {
     int log_failed;
     int queue_failed;
+    DeliveryWorker *worker;
     TelemetryQueue *queue;
     unsigned long persisted;
     unsigned long queue_duplicates;
@@ -80,11 +82,11 @@ static void usage(FILE *stream)
             "Padrões: host=127.0.0.1 port=1883 client-id=smart-industry-gateway timeout-ms=5000\n"
             "InterSCity (opcional): sem --interscity-url e --interscity-map nada é enviado; "
             "interscity-timeout-ms=5000\n"
-            "Fila SQLite (opcional): --queue-db exige URL e mapa; persiste sem enviar HTTP.\n");
+            "Fila SQLite (opcional): --queue-db exige URL e mapa; persiste e envia por worker HTTP independente.\n");
 }
 
 /* Same basic URL contract as the direct client, checked without creating an
- * HTTP client in queue mode. No DNS or network access; target is for later use.
+ * HTTP client. No DNS or network access during argument validation.
  */
 static int valid_queue_url(const char *url)
 {
@@ -357,7 +359,7 @@ static void receive_message(const char *topic, const void *payload, size_t lengt
     GatewayContext *app = context;
     GatewayTelemetry telemetry;
     GatewayTelemetryError error;
-    if (stop_requested || app->log_failed || app->queue_failed) return;
+    if (stop_requested || app->log_failed || app->queue_failed || delivery_worker_failed(app->worker)) return;
     if (gateway_telemetry_parse(topic, payload, length, &telemetry, &error) != 0) {
         /* Do not print raw topic/payload: both may contain terminal controls. */
         if (fprintf(stderr, "Telemetria inválida: %s (payload=%zu bytes).\n",
@@ -382,12 +384,16 @@ static int reconnect_mqtt(GatewayContext *app, MqttSubscriber **subscriber, cons
                           int port, const char *client_id, int timeout_ms)
 {
     unsigned delay_ms = RECONNECT_FIRST_MS;
-    while (!stop_requested && !app->log_failed && !app->queue_failed) {
-        sleep_ms(delay_ms);
-        if (stop_requested) return 0;
+    while (!stop_requested && !app->log_failed && !app->queue_failed && !delivery_worker_failed(app->worker)) {
+        if (app->worker == NULL) sleep_ms(delay_ms);
+        else {
+            for (unsigned waited = 0; waited < delay_ms && !stop_requested &&
+                 !delivery_worker_failed(app->worker); waited += 50) sleep_ms(50);
+        }
+        if (stop_requested || delivery_worker_failed(app->worker)) return 0;
         if (mqtt_subscriber_connect(subscriber, host, port, client_id, timeout_ms,
                                     receive_message, app) == 0) {
-            if (app->queue_failed) return 0;
+            if (app->queue_failed || delivery_worker_failed(app->worker)) return 0;
             app->reconnects++;
             if (puts("MQTT reconectado: assinatura renovada.") < 0 || fflush(stdout) != 0) {
                 app->log_failed = 1;
@@ -395,7 +401,7 @@ static int reconnect_mqtt(GatewayContext *app, MqttSubscriber **subscriber, cons
             }
             return 1;
         }
-        if (app->queue_failed) return 0;
+        if (app->queue_failed || delivery_worker_failed(app->worker)) return 0;
         unsigned next_ms = delay_ms * 2 > RECONNECT_MAX_MS ? RECONNECT_MAX_MS : delay_ms * 2;
         if (fprintf(stderr, "Erro MQTT ao reconectar: %s. Nova tentativa em %u ms.\n",
                     mqtt_subscriber_error_string(mqtt_subscriber_last_error()), next_ms) < 0) {
@@ -495,8 +501,14 @@ int main(int argc, char **argv)
                 report_queue_error("ao abrir", &queue_error);
                 return 1;
             }
-            if (printf("Fila SQLite habilitada (%zu máquinas mapeadas; sem envios HTTP).\n",
+            if (delivery_worker_start(&app.worker, queue_db, interscity_url, interscity_timeout_ms) != 0) {
+                fprintf(stderr, "Erro ao iniciar worker HTTP.\n");
+                close_queue(&app.queue);
+                return 1;
+            }
+            if (printf("Fila SQLite habilitada (%zu máquinas mapeadas; worker HTTP independente).\n",
                        interscity_machines.count) < 0 || fflush(stdout) != 0) {
+                delivery_worker_stop(&app.worker);
                 close_queue(&app.queue);
                 return 1;
             }
@@ -517,17 +529,18 @@ int main(int argc, char **argv)
             fprintf(stderr, "Erro MQTT ao conectar/assinar: %s.\n",
                     mqtt_subscriber_error_string(mqtt_subscriber_last_error()));
         }
+        if (delivery_worker_stop(&app.worker) != 0) code = 1;
         interscity_client_destroy(&app.interscity);
         if (close_queue(&app.queue) != 0) code = 1;
         return code; /* connect already releases partial resources. */
     }
-    if (!stop_requested && !app.log_failed && !app.queue_failed) {
+    if (!stop_requested && !app.log_failed && !app.queue_failed && !delivery_worker_failed(app.worker)) {
         if (puts("Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).") < 0 ||
             fflush(stdout) != 0) app.log_failed = 1;
     }
-    while (!stop_requested && !app.log_failed && !app.queue_failed) {
+    while (!stop_requested && !app.log_failed && !app.queue_failed && !delivery_worker_failed(app.worker)) {
         int rc = mqtt_subscriber_poll(subscriber, 250);
-        if (stop_requested || app.queue_failed) break;
+        if (stop_requested || app.queue_failed || delivery_worker_failed(app.worker)) break;
         if (rc == 0) continue;
         /* Capture before close overwrites the process-local diagnostic. */
         MqttSubscriberError error = mqtt_subscriber_last_error();
@@ -536,12 +549,13 @@ int main(int argc, char **argv)
         mqtt_subscriber_close(&subscriber); /* the broken session is discarded */
         if (!reconnect_mqtt(&app, &subscriber, host, port, client_id, timeout_ms)) break;
     }
-    if (app.log_failed || app.queue_failed) result = 1;
+    if (app.log_failed || app.queue_failed || delivery_worker_failed(app.worker)) result = 1;
     if (mqtt_subscriber_close(&subscriber) != 0) {
         fprintf(stderr, "Erro MQTT ao encerrar: %s.\n",
                 mqtt_subscriber_error_string(mqtt_subscriber_last_error()));
         result = 1;
     }
+    if (delivery_worker_stop(&app.worker) != 0) result = 1;
     if (app.queue != NULL) {
         if (printf("Fila SQLite: %lu persistidas, %lu duplicatas ignoradas, %lu sem mapeamento, "
                    "%lu não preparadas.\n", app.persisted, app.queue_duplicates, app.unmapped, app.failed) < 0 ||
