@@ -29,6 +29,34 @@ COLLECTOR_QUERIES = []  # consultas ao Data Collector (uuid de cada uma)
 LOCK = threading.Lock()
 
 
+def collector_cases():
+    uuid = '00000000-0000-4000-8000-000000000201'
+    def response(date='2024-01-01T00:00:00.000Z'):
+        return {'resources': [{'id': uuid, 'capabilities': {
+            'sim_operating_state': [{'value': 'IDLE', 'date': date}]}}]}
+    cases = [('UTC sem fração', response('2024-01-01T00:00:00Z'), True),
+             ('UTC com fração', response(), True),
+             ('fração longa', response('2024-01-01T00:00:00.123456789Z'), True)]
+    wrong = response()
+    wrong['resources'][0]['id'] = '00000000-0000-4000-8000-000000000400'
+    cases.append(('UUID diferente', wrong, False))
+    missing = response()
+    del missing['resources'][0]['id']
+    cases.append(('ID ausente', missing, False))
+    for identifier in (None, 42, True, {}, [], '', 'not-a-uuid', uuid + '\x00'):
+        invalid = response()
+        invalid['resources'][0]['id'] = identifier
+        cases.append((f'ID inválido {identifier!r}', invalid, False))
+    for date in ('2024-01-01T00:00:00XINVALID', '2024-01-01T00:00:00',
+                 '2024-01-01T00:00:00.Z', '2024-01-01T00:00:00.12xZ',
+                 '2024-01-01T00:00:00.000Zextra', '2024-01-01T00:00:00+00:00',
+                 '2024-01-01T00:00:00-03:00', '2024-01-01T00:00:00.123',
+                 '2024-01-01T00:00:00z', '2024-01-01T00:00:00Z\x00'):
+        cases.append((f'data inválida {date!r}', response(date), False))
+    cases.append(('válida após inválidas', response(), True))
+    return cases
+
+
 class MockAdaptor(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'  # permite reaproveitar a conexão
 
@@ -72,8 +100,16 @@ class MockAdaptor(BaseHTTPRequestHandler):
         uuid = json.loads(body.decode('utf-8'))['uuids'][0]
         with LOCK:
             COLLECTOR_QUERIES.append(uuid)
+            case = None
+            if hasattr(self.server, 'last_cases'):
+                index = self.server.last_index
+                self.server.last_index += 1
+                case = self.server.last_cases[index] if index < len(self.server.last_cases) else None
         try:
-            if uuid[-3:] == '999':  # armazenada apesar do timeout do Adaptor
+            if hasattr(self.server, 'last_cases'):
+                assert case is not None, 'consulta extra não esperada'
+                self.respond(200, json.dumps(case[1]).encode('utf-8'))
+            elif uuid[-3:] == '999':  # armazenada apesar do timeout do Adaptor
                 payload = {'resources': [{'id': uuid, 'capabilities': {'sim_operating_state': [
                     {'value': 'IDLE', 'date': '2024-01-01T00:02:00.000Z'}]}}]}
                 self.respond(200, json.dumps(payload).encode('utf-8'))
@@ -92,11 +128,14 @@ def closed_port():
 def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), MockAdaptor)
     server.daemon_threads = True
+    server.last_cases = collector_cases()
+    server.last_index = 0
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = server.server_address[1]
     env = dict(os.environ,
                SIM_INTERSCITY_MOCK_URL=f'http://127.0.0.1:{port}{PREFIX}',
-               SIM_INTERSCITY_CLOSED_URL=f'http://127.0.0.1:{closed_port()}')
+               SIM_INTERSCITY_CLOSED_URL=f'http://127.0.0.1:{closed_port()}',
+               SIM_INTERSCITY_LAST_VALID=''.join('1' if valid else '0' for _, _, valid in server.last_cases))
     try:
         result = subprocess.run([CLIENT_TEST], env=env, timeout=30)
     finally:
@@ -121,6 +160,8 @@ def main():
     with LOCK:
         received = list(RECEIVED)
     errors = []
+    if COLLECTOR_QUERIES != ['00000000-0000-4000-8000-000000000201'] * len(server.last_cases):
+        errors.append(f'consultas inesperadas: {COLLECTOR_QUERIES!r}')
     if [(r['path'], r['body']) for r in received] != expected:
         errors.append('requisições recebidas diferentes das esperadas:\n'
                       + json.dumps(received, indent=2, ensure_ascii=False))
@@ -137,6 +178,7 @@ def main():
         return 1
     print(f'PASS: cliente HTTP com {len(received)} requisições conferidas '
           '(201, 400, 500, timeout, porta fechada e reuso de conexão)')
+    print(f'PASS: {len(server.last_cases)} consultas conferidas (UUID, datas UTC completas e recuperação)')
     return 0
 
 

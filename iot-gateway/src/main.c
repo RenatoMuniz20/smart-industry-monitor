@@ -1,9 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 #include "gateway_telemetry.h"
+#include "delivery_worker.h"
 #include "interscity_client.h"
 #include "interscity_mapping.h"
 #include "interscity_payload.h"
 #include "mqtt_subscriber.h"
+#include "telemetry_queue.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -29,6 +31,11 @@ typedef struct {
 
 typedef struct {
     int log_failed;
+    int queue_failed;
+    DeliveryWorker *worker;
+    TelemetryQueue *queue;
+    unsigned long persisted;
+    unsigned long queue_duplicates;
     InterscityClient *interscity;      /* NULL: no forwarding, SIM-04 behavior */
     const InterscityMapping *mapping;
     unsigned long sent;                /* confirmed by HTTP 201 or by the Data Collector */
@@ -70,11 +77,50 @@ static void usage(FILE *stream)
     fprintf(stream, "Uso: iot-gateway [--host <host>] [--port <1..65535>] "
             "[--client-id <id>] [--timeout-ms <1..5000>]\n"
             "                  [--interscity-url <url> --interscity-map <arquivo> "
-            "[--interscity-timeout-ms <1..60000>]]\n"
+            "[--interscity-timeout-ms <1..60000>] [--queue-db <arquivo>]]\n"
             "     iot-gateway --help\n"
             "Padrões: host=127.0.0.1 port=1883 client-id=smart-industry-gateway timeout-ms=5000\n"
             "InterSCity (opcional): sem --interscity-url e --interscity-map nada é enviado; "
-            "interscity-timeout-ms=5000\n");
+            "interscity-timeout-ms=5000\n"
+            "Fila SQLite (opcional): --queue-db exige URL e mapa; persiste e envia por worker HTTP independente.\n");
+}
+
+/* Same basic URL contract as the direct client, checked without creating an
+ * HTTP client. No DNS or network access during argument validation.
+ */
+static int valid_queue_url(const char *url)
+{
+    size_t scheme;
+    if (strncmp(url, "http://", 7) == 0) scheme = 7;
+    else if (strncmp(url, "https://", 8) == 0) scheme = 8;
+    else return 0;
+    size_t length = strnlen(url, 512);
+    if (length == 512) return 0;
+    for (size_t i = 0; i < length; ++i) {
+        unsigned char c = (unsigned char)url[i];
+        if (c <= 0x20 || c == 0x7f) return 0;
+    }
+    while (length > scheme && url[length - 1] == '/') --length;
+    return length > scheme && length + 61 < 512;
+}
+
+static void report_queue_error(const char *operation, const TelemetryQueueError *error)
+{
+    struct json_object *text = json_object_new_string(error->message);
+    const char *escaped = text != NULL ? json_object_to_json_string_ext(text, JSON_C_TO_STRING_PLAIN) : NULL;
+    fprintf(stderr, "Erro SQLite %s (código %d): %s.\n", operation, error->sqlite_code,
+            escaped != NULL ? escaped : "diagnóstico indisponível");
+    json_object_put(text);
+}
+
+static int close_queue(TelemetryQueue **queue)
+{
+    TelemetryQueueError error;
+    if (telemetry_queue_close(queue, &error) != TELEMETRY_QUEUE_OK) {
+        report_queue_error("ao fechar", &error);
+        return -1;
+    }
+    return 0;
 }
 
 /* json-c escapes quotes, backslashes and ASCII controls in untrusted texts.
@@ -271,12 +317,49 @@ static void forward_to_interscity(GatewayContext *app, const GatewayTelemetry *t
     report_post_failure(app, t, error, &again);
 }
 
+static void persist_telemetry(GatewayContext *app, const GatewayTelemetry *t)
+{
+    const char *uuid = interscity_mapping_lookup(app->mapping, t->machine_id);
+    if (uuid == NULL) {
+        app->unmapped++;
+        if (fprintf(stderr, "Fila SQLite: machine_id=%d sem UUID no mapeamento; não persistida.\n",
+                    t->machine_id) < 0) app->log_failed = 1;
+        return;
+    }
+    char body[INTERSCITY_PAYLOAD_CAPACITY];
+    InterscityPayloadError payload_error;
+    if (interscity_payload_build(t, body, sizeof body, NULL, &payload_error) != 0) {
+        app->failed++;
+        if (fprintf(stderr, "Fila SQLite: machine_id=%d não persistida: %s.\n", t->machine_id,
+                    interscity_payload_error_string(payload_error)) < 0) app->log_failed = 1;
+        return;
+    }
+    char timestamp[TIMESTAMP_TEXT];
+    normalize_timestamp(t->timestamp, timestamp);
+    TelemetryQueueError error;
+    TelemetryQueueResult result = telemetry_queue_enqueue(app->queue, t->machine_id,
+                                                          timestamp, uuid, body, &error);
+    if (result == TELEMETRY_QUEUE_OK) {
+        app->persisted++;
+        if (printf("Fila SQLite: machine_id=%d persistida (ts %s, pending).\n",
+                   t->machine_id, timestamp) < 0 || fflush(stdout) != 0) app->log_failed = 1;
+    } else if (result == TELEMETRY_QUEUE_DUPLICATE_QUEUED || result == TELEMETRY_QUEUE_DUPLICATE_DELIVERED) {
+        app->queue_duplicates++;
+        if (printf("Fila SQLite: machine_id=%d duplicata ignorada (ts %s, %s).\n", t->machine_id,
+                   timestamp, result == TELEMETRY_QUEUE_DUPLICATE_QUEUED ? "já enfileirada" : "já confirmada") < 0 ||
+            fflush(stdout) != 0) app->log_failed = 1;
+    } else {
+        report_queue_error("ao persistir", &error);
+        app->queue_failed = 1;
+    }
+}
+
 static void receive_message(const char *topic, const void *payload, size_t length, void *context)
 {
     GatewayContext *app = context;
     GatewayTelemetry telemetry;
     GatewayTelemetryError error;
-    if (stop_requested || app->log_failed) return;
+    if (stop_requested || app->log_failed || app->queue_failed || delivery_worker_failed(app->worker)) return;
     if (gateway_telemetry_parse(topic, payload, length, &telemetry, &error) != 0) {
         /* Do not print raw topic/payload: both may contain terminal controls. */
         if (fprintf(stderr, "Telemetria inválida: %s (payload=%zu bytes).\n",
@@ -288,7 +371,8 @@ static void receive_message(const char *topic, const void *payload, size_t lengt
         app->log_failed = 1;
         return;
     }
-    if (app->interscity != NULL) forward_to_interscity(app, &telemetry);
+    if (app->queue != NULL) persist_telemetry(app, &telemetry);
+    else if (app->interscity != NULL) forward_to_interscity(app, &telemetry);
 }
 
 /* Reconnects with exponential pause (1 s, 2 s, ... up to 30 s) until the broker
@@ -300,11 +384,16 @@ static int reconnect_mqtt(GatewayContext *app, MqttSubscriber **subscriber, cons
                           int port, const char *client_id, int timeout_ms)
 {
     unsigned delay_ms = RECONNECT_FIRST_MS;
-    while (!stop_requested && !app->log_failed) {
-        sleep_ms(delay_ms);
-        if (stop_requested) return 0;
+    while (!stop_requested && !app->log_failed && !app->queue_failed && !delivery_worker_failed(app->worker)) {
+        if (app->worker == NULL) sleep_ms(delay_ms);
+        else {
+            for (unsigned waited = 0; waited < delay_ms && !stop_requested &&
+                 !delivery_worker_failed(app->worker); waited += 50) sleep_ms(50);
+        }
+        if (stop_requested || delivery_worker_failed(app->worker)) return 0;
         if (mqtt_subscriber_connect(subscriber, host, port, client_id, timeout_ms,
                                     receive_message, app) == 0) {
+            if (app->queue_failed || delivery_worker_failed(app->worker)) return 0;
             app->reconnects++;
             if (puts("MQTT reconectado: assinatura renovada.") < 0 || fflush(stdout) != 0) {
                 app->log_failed = 1;
@@ -312,6 +401,7 @@ static int reconnect_mqtt(GatewayContext *app, MqttSubscriber **subscriber, cons
             }
             return 1;
         }
+        if (app->queue_failed || delivery_worker_failed(app->worker)) return 0;
         unsigned next_ms = delay_ms * 2 > RECONNECT_MAX_MS ? RECONNECT_MAX_MS : delay_ms * 2;
         if (fprintf(stderr, "Erro MQTT ao reconectar: %s. Nova tentativa em %u ms.\n",
                     mqtt_subscriber_error_string(mqtt_subscriber_last_error()), next_ms) < 0) {
@@ -330,6 +420,7 @@ int main(int argc, char **argv)
     int timeout_ms = 5000;
     const char *interscity_url = NULL;
     const char *interscity_map = NULL;
+    const char *queue_db = NULL;
     int interscity_timeout_ms = 5000;
     unsigned seen = 0;
     GatewayContext app = {0}; /* Callback may execute before connect returns. */
@@ -350,6 +441,7 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--interscity-url") == 0) bit = 16;
         else if (strcmp(argv[i], "--interscity-map") == 0) bit = 32;
         else if (strcmp(argv[i], "--interscity-timeout-ms") == 0) bit = 64;
+        else if (strcmp(argv[i], "--queue-db") == 0) bit = 128;
         else goto invalid_arguments;
         if (seen & bit) goto invalid_arguments;
         seen |= bit;
@@ -359,6 +451,7 @@ int main(int argc, char **argv)
         else if (bit == 4) client_id = value;
         else if (bit == 16) interscity_url = value;
         else if (bit == 32) interscity_map = value;
+        else if (bit == 128) queue_db = value;
         else if (bit == 2) {
             if (parse_positive(value, 65535, &port) != 0) goto invalid_arguments;
         } else if (bit == 64) {
@@ -368,6 +461,8 @@ int main(int argc, char **argv)
     /* Forwarding needs both URL and mapping; its timeout alone is meaningless. */
     if ((interscity_url == NULL) != (interscity_map == NULL)) goto invalid_arguments;
     if (interscity_url == NULL && (seen & 64)) goto invalid_arguments;
+    if (queue_db != NULL && (interscity_url == NULL || interscity_map == NULL ||
+                             !valid_queue_url(interscity_url))) goto invalid_arguments;
 
     struct sigaction action = {0};
     action.sa_handler = request_stop;
@@ -379,8 +474,8 @@ int main(int argc, char **argv)
     if (interscity_url != NULL) {
         /* Before MQTT: callbacks may run while connect is still in progress. */
         InterscityClientError client_error = INTERSCITY_CLIENT_OK;
-        if (interscity_client_create(&app.interscity, interscity_url, interscity_timeout_ms,
-                                     &client_error) != 0) {
+        if (queue_db == NULL && interscity_client_create(&app.interscity, interscity_url, interscity_timeout_ms,
+                                                        &client_error) != 0) {
             if (client_error == INTERSCITY_CLIENT_ARGUMENT) goto invalid_arguments;
             fprintf(stderr, "Erro InterSCity ao inicializar: %s.\n",
                     interscity_client_error_string(client_error));
@@ -400,31 +495,52 @@ int main(int argc, char **argv)
             return 1;
         }
         app.mapping = &interscity_machines;
-        /* The URL was validated by the client: no spaces or control characters. */
-        if (printf("InterSCity habilitado: %s (%zu máquinas mapeadas, timeout %d ms).\n",
-                   interscity_url, interscity_machines.count, interscity_timeout_ms) < 0 ||
-            fflush(stdout) != 0) {
-            interscity_client_destroy(&app.interscity);
-            return 1;
+        if (queue_db != NULL) {
+            TelemetryQueueError queue_error;
+            if (telemetry_queue_open(queue_db, &app.queue, &queue_error) != TELEMETRY_QUEUE_OK) {
+                report_queue_error("ao abrir", &queue_error);
+                return 1;
+            }
+            if (delivery_worker_start(&app.worker, queue_db, interscity_url, interscity_timeout_ms) != 0) {
+                fprintf(stderr, "Erro ao iniciar worker HTTP.\n");
+                close_queue(&app.queue);
+                return 1;
+            }
+            if (printf("Fila SQLite habilitada (%zu máquinas mapeadas; worker HTTP independente).\n",
+                       interscity_machines.count) < 0 || fflush(stdout) != 0) {
+                delivery_worker_stop(&app.worker);
+                close_queue(&app.queue);
+                return 1;
+            }
+        } else {
+            /* The URL was validated by the client: no spaces or control characters. */
+            if (printf("InterSCity habilitado: %s (%zu máquinas mapeadas, timeout %d ms).\n",
+                       interscity_url, interscity_machines.count, interscity_timeout_ms) < 0 ||
+                fflush(stdout) != 0) {
+                interscity_client_destroy(&app.interscity);
+                return 1;
+            }
         }
     }
     if (mqtt_subscriber_connect(&subscriber, host, port, client_id, timeout_ms,
                                 receive_message, &app) != 0) {
-        int code = stop_requested ? 0 : 1;
+        int code = app.queue_failed ? 1 : (stop_requested ? 0 : 1);
         if (!stop_requested) {
             fprintf(stderr, "Erro MQTT ao conectar/assinar: %s.\n",
                     mqtt_subscriber_error_string(mqtt_subscriber_last_error()));
         }
+        if (delivery_worker_stop(&app.worker) != 0) code = 1;
         interscity_client_destroy(&app.interscity);
+        if (close_queue(&app.queue) != 0) code = 1;
         return code; /* connect already releases partial resources. */
     }
-    if (!stop_requested && !app.log_failed) {
+    if (!stop_requested && !app.log_failed && !app.queue_failed && !delivery_worker_failed(app.worker)) {
         if (puts("Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).") < 0 ||
             fflush(stdout) != 0) app.log_failed = 1;
     }
-    while (!stop_requested && !app.log_failed) {
+    while (!stop_requested && !app.log_failed && !app.queue_failed && !delivery_worker_failed(app.worker)) {
         int rc = mqtt_subscriber_poll(subscriber, 250);
-        if (stop_requested) break;
+        if (stop_requested || app.queue_failed || delivery_worker_failed(app.worker)) break;
         if (rc == 0) continue;
         /* Capture before close overwrites the process-local diagnostic. */
         MqttSubscriberError error = mqtt_subscriber_last_error();
@@ -433,11 +549,18 @@ int main(int argc, char **argv)
         mqtt_subscriber_close(&subscriber); /* the broken session is discarded */
         if (!reconnect_mqtt(&app, &subscriber, host, port, client_id, timeout_ms)) break;
     }
-    if (app.log_failed) result = 1;
+    if (app.log_failed || app.queue_failed || delivery_worker_failed(app.worker)) result = 1;
     if (mqtt_subscriber_close(&subscriber) != 0) {
         fprintf(stderr, "Erro MQTT ao encerrar: %s.\n",
                 mqtt_subscriber_error_string(mqtt_subscriber_last_error()));
         result = 1;
+    }
+    if (delivery_worker_stop(&app.worker) != 0) result = 1;
+    if (app.queue != NULL) {
+        if (printf("Fila SQLite: %lu persistidas, %lu duplicatas ignoradas, %lu sem mapeamento, "
+                   "%lu não preparadas.\n", app.persisted, app.queue_duplicates, app.unmapped, app.failed) < 0 ||
+            fflush(stdout) != 0) result = 1;
+        if (close_queue(&app.queue) != 0) result = 1;
     }
     if (app.interscity != NULL) {
         if (printf("InterSCity: %lu enviadas, %lu falhas, %lu sem mapeamento.\n",

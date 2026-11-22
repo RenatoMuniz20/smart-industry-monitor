@@ -63,7 +63,10 @@ int interscity_client_is_ambiguous(InterscityClientError error);
  * bytes and is written only when *found = 1. *found = 0 when the machine has no
  * stored data (HTTP 404 with "Resource not found"). Any other 404 or status is an
  * error, so a wrong route is never mistaken for "no data". Read-only: it can be
- * repeated safely. Returns 0 on success, -1 on error.
+ * repeated safely. A returned resource must have a string id matching uuid.
+ * Dates must be complete UTC YYYY-MM-DDTHH:MM:SS[.digits]Z; offsets and missing
+ * timezone markers are rejected (RESPONSE), never compared without normalization.
+ * Returns 0 on success, -1 on error.
  */
 int interscity_client_last_timestamp(InterscityClient *client, const char *uuid,
                                      char *out, size_t out_size, int *found,
