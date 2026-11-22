@@ -12,7 +12,8 @@ um backend REST em C.
 Dataset CSV (Industrial Machine Predictive Maintenance v3)
   → Dataset Replayers em C (um processo por máquina)
   → MQTT 3.1.1, QoS 1 (Eclipse Mosquitto)
-  → IoT Gateway em C (validação do contrato JSON, reconexão MQTT e deduplicação)
+  → IoT Gateway em C (validação do contrato JSON e reconexão MQTT)
+  → Entrega direta SIM-08 ou fila SQLite + worker HTTP independente SIM-09
   → HTTPS (libcurl)
   → InterSCity: Kong → Resource Adaptor → RabbitMQ → Data Collector
   → Backend REST em C (libmicrohttpd; consulta ao InterSCity por libcurl e json-c)
@@ -37,10 +38,12 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | SIM-05 | Integração com o InterSCity (instância do LSDi/UFMA) | Concluída | [SIM-05](docs/sim-05-interscity.md) |
 | SIM-06 | Backend REST em C: consulta ao InterSCity e API | Concluída | [SIM-06](docs/sim-06-backend.md), [Backend](backend/README.md) |
 | SIM-08 | Tolerância a falhas no Gateway: reconexão MQTT, deduplicação e consulta antes do reenvio | Concluída | [SIM-08](docs/sim-08-tolerancia-falhas.md) |
+| SIM-09 | Fila durável SQLite e worker HTTP com reconciliação | Concluída | [Fila durável](docs/sim-09-fila-duravel.md), [Validação final](docs/sim-09-validacao-final.md) |
 | — | Dashboard web | Pendente | — |
 | — | Escalabilidade | Pendente | — |
 | SIM-10.1 | Mosquitto e IoT Gateway em Compose com SQLite persistente | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
-| — | Containerização dos demais componentes e implantação em nuvem | Pendente | — |
+| SIM-10.2 | Dataset Replayer e Backend REST no Compose | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
+| — | Containerização do Dashboard e implantação em nuvem | Pendente | — |
 
 ## Estrutura do repositório
 
@@ -63,7 +66,7 @@ Desenvolvido e validado no Ubuntu 24.04 (WSL2). Dependências:
 
 ```sh
 sudo apt install build-essential pkg-config libjson-c-dev libmosquitto-dev \
-  libmicrohttpd-dev libcurl4-openssl-dev mosquitto mosquitto-clients python3 curl jq
+  libmicrohttpd-dev libcurl4-openssl-dev libsqlite3-dev mosquitto mosquitto-clients python3 curl jq
 ```
 
 Os documentos da SIM-03 e da SIM-04 registram também uma validação em Arch Linux.
@@ -92,6 +95,8 @@ HTTP são testados contra servidores falsos em `127.0.0.1`. O alvo
 
 ## Execução do fluxo completo
 
+O exemplo abaixo usa o modo legado direto, sem fila. Execute contra a instância
+compartilhada somente quando autorizado. Para Compose com fila, use a seção ao final.
 Em terminais separados, na raiz do repositório:
 
 ```sh
@@ -112,9 +117,9 @@ backend/build/backend --port 8080 --machines config/interscity/machines.conf
 curl -s http://127.0.0.1:8080/api/machines/latest
 ```
 
-A instância do InterSCity é compartilhada pelas equipes da disciplina. Dentro
-de uma mesma execução do Gateway, uma amostra já enviada (mesma máquina e mesmo
-timestamp, ou anterior) é ignorada. Reiniciar o Gateway zera essa memória, e
+A instância do InterSCity é compartilhada pelas equipes da disciplina. No modo
+legado SIM-08 (sem `--queue-db`), dentro de uma mesma execução do Gateway, uma
+amostra já enviada (mesma máquina e mesmo timestamp, ou anterior) é ignorada. Reiniciar o Gateway zera essa memória, e
 amostras antigas podem ser reenviadas. Cuidados em
 [SIM-05](docs/sim-05-interscity.md) e [SIM-08](docs/sim-08-tolerancia-falhas.md).
 
@@ -122,22 +127,25 @@ amostras antigas podem ser reenviadas. Cuidados em
 
 - `power` não existe no dataset e é publicado como `null`;
   `failure_within_24h` é uma predição do dataset, não uma falha medida.
-- Tolerância a falhas (SIM-08): a deduplicação é só em memória, a consulta antes
-  do reenvio usa janela fixa de 2 s, e mensagens publicadas durante a queda do
+- No modo legado SIM-08 (sem `--queue-db`), a deduplicação é só em memória. A
+  consulta antes do reenvio usa janela fixa de 2 s, e mensagens publicadas durante a queda do
   broker se perdem (sessão MQTT limpa). Detalhes em
   [SIM-08](docs/sim-08-tolerancia-falhas.md).
-- O Gateway envia ao InterSCity de forma síncrona numa única thread: adequado
-  para as dez máquinas (média de 69 ms por envio), não para centenas.
+- No modo legado SIM-08, o envio HTTP é síncrono na thread principal. No modo
+  SIM-09/Compose, MQTT persiste no SQLite e um worker HTTP independente entrega
+  a fila. Pendências e cursor sobrevivem ao reinício; não há garantia exactly-once,
+  e PUBACK MQTT não é atômico com COMMIT SQLite. Ver [SIM-09](docs/sim-09-fila-duravel.md).
 - O Mosquitto de desenvolvimento aceita conexões anônimas somente em localhost;
   essa configuração não é adequada para implantação exposta.
 - O backend não tem autenticação. Ele escuta só em `127.0.0.1` por padrão;
   `--bind 0.0.0.0` o expõe na rede. Detalhes em [SIM-06](docs/sim-06-backend.md).
 
 
-## Compose local — SIM-10.1
+## Compose local — SIM-10.1 e SIM-10.2
 
-Mosquitto e Gateway podem ser iniciados com `docker compose build gateway` e
-`docker compose up -d mosquitto gateway`. O Gateway usa obrigatoriamente
+A subida padrão `docker compose up -d --build` inicia Mosquitto, Gateway e
+Backend REST (`http://127.0.0.1:8080/api/health`). O profile `replay` fica desligado.
+O Gateway usa obrigatoriamente
 `--queue-db /data/telemetry.db`, volume nomeado e mapa somente leitura. MQTT é
 publicado apenas em `127.0.0.1:1883` (`MQTT_PORT` permite outra porta local).
 
@@ -145,4 +153,19 @@ O destino padrão `INTERSCITY_URL=http://127.0.0.1:9` é deliberadamente indispo
 **dentro do contêiner**, para validar a fila sem enviar à UFMA. Configurar outro
 destino somente quando autorizado. `docker compose down` preserva o volume;
 não usar `-v` para conservar pendências. Procedimento, permissões, resultados e
-limitações: [SIM-10.1](docs/sim-10-containerizacao.md).
+limitações: [SIM-10](docs/sim-10-containerizacao.md).
+
+Somente após verificar `Gateway pronto` nos logs da inicialização atual
+(`docker compose logs gateway`), iniciar a demonstração finita das dez máquinas:
+
+```sh
+LIMIT=3 INTERVAL_MS=1000 docker compose --profile replay up -d replayer
+docker compose wait replayer
+docker compose logs replayer
+```
+
+O serviço reutiliza o launcher Bash existente, com dez processos C, CSV somente
+leitura e `MQTT_HOST=mosquitto`, porta interna 1883. Padrões: dez registros por
+máquina e intervalo de 1000 ms. Não há reinício automático do Replayer.
+`depends_on: service_started` não comprova SUBACK: a conferência da prontidão
+antes da publicação é necessária, pois a sessão MQTT é limpa.

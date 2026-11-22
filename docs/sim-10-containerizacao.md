@@ -1,6 +1,9 @@
-# SIM-10.1 — Mosquitto e Gateway com SQLite persistente
+# SIM-10 — Containerização local
 
-## Base e escopo
+As seções iniciais registram a SIM-10.1. A seção SIM-10.2 ao final descreve o
+Compose atual: Mosquitto, Gateway e Backend por padrão, com Replayer opcional.
+
+## Base e escopo da SIM-10.1 (histórico)
 
 Branch `feature/docker-compose`, working tree inicialmente limpo. HEAD e main
 local: `13050d8e6b4c8c7c86776c0514395e4851722603`, merge da PR #10 (`fix/sim-09`).
@@ -128,7 +131,7 @@ migra os dados. Preservar diretório e WAL/SHM; não copiar apenas o arquivo do
 banco enquanto estiver ativo. Volume antigo com proprietário incompatível exige
 ajuste administrativo dirigido ao volume correto para UID/GID 10001.
 
-## Resultados observados nesta rodada
+## Resultados observados na SIM-10.1 (histórico)
 
 Docker Engine 29.9.2 e Compose 5.6.1 disponíveis; acesso ao daemon exigiu execução
 fora do sandbox. Validação no projeto isolado, sem interferir em contêineres
@@ -211,3 +214,153 @@ pendências porque o endpoint local de teste foi mantido indisponível.
 - HTTPS real, entrega ao InterSCity externo e demais componentes ficam para
   validações posteriores autorizadas. O teste desta etapa verifica fila durável,
   não entrega externa nem exactly-once.
+
+
+## SIM-10.2 — Dataset Replayer e Backend REST
+
+Base: branch `feature/docker-compose`, working tree inicialmente limpo, HEAD
+`f18e04a` (`feat: docker`). Nenhum C, Makefile, launcher ou arquivo de configuração
+da SIM-10.1 foi alterado. O volume gateway_data e os serviços existentes foram
+preservados; o Backend e o Replayer foram acrescentados ao Compose.
+
+### Imagens e execução
+
+- `dataset-replayer/Dockerfile`: build multi-stage com Makefile atual. Runtime
+  Arch com Bash (verificação explícita >=5.1) e libmosquitto. UID/GID 10001;
+  ENTRYPOINT executa diretamente o Bash com o launcher original. O executável
+  fica em `/app/dataset-replayer/build/`, mantendo o caminho relativo esperado.
+- O CSV é bind somente leitura em `/app/data/predictive_maintenance_v3.csv`.
+  Não integra a imagem nem precisa estar no contexto de build. `CSV_PATH` aponta
+  explicitamente esse arquivo. Scripts/configuração/dataset não são reimplementados.
+- `replayer` tem profile `replay`, `restart: "no"`, `MQTT_HOST=mosquitto` e porta
+  **interna** 1883. A variável MQTT_PORT do host altera somente a publicação do
+  broker, não a porta interna dos produtores. LIMIT e INTERVAL_MS configuram o
+  launcher, com padrões 10 e 1000 respectivamente.
+- Os dez IDs continuam 1,2,3,6,7,8,9,11,12,13. Há dez processos C independentes
+  dentro do contêiner, gerenciados pelo launcher original, não dez réplicas.
+- `backend/Dockerfile`: build pelo Makefile atual, runtime Arch com libmicrohttpd,
+  libcurl, json-c e CA. UID/GID 10001; ENTRYPOINT direto preserva SIGTERM.
+  CLI explícita: `--bind 0.0.0.0 --port 8080`, mapa RO no mesmo caminho do Gateway,
+  URL interpolada de INTERSCITY_URL e timeout HTTP de 5000 ms. Host publicado
+  somente em `127.0.0.1:8080:8080`, healthcheck GET local `/api/health`.
+- O Backend não depende do Gateway: consulta o InterSCity, não o SQLite. Seu
+  health indica servidor REST ativo, não disponibilidade do middleware.
+- Os contextos `.dockerignore` incluem somente Makefile, fontes/headers e,
+  no Replayer, o launcher necessário. Build/testes do host não entram nas imagens.
+
+### Procedimento seguro e prontidão
+
+Usar um projeto novo, diferente da validação SIM-10.1. Exemplo de demonstração:
+
+```sh
+export COMPOSE_PROJECT_NAME=sim102-demo
+export MQTT_PORT=18885
+export INTERSCITY_URL=http://127.0.0.1:9
+docker compose config
+docker compose build gateway replayer backend
+docker compose up -d
+docker compose ps
+curl --fail http://127.0.0.1:8080/api/health
+docker compose logs gateway
+# Só continuar após Gateway pronto na inicialização atual (conexão + SUBACK).
+LIMIT=3 INTERVAL_MS=1000 docker compose --profile replay up -d replayer
+docker compose wait replayer
+docker compose logs replayer
+docker compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
+  'SELECT machine_id,count(*) FROM telemetry_queue GROUP BY machine_id ORDER BY machine_id;'
+docker compose --profile replay down
+```
+
+Se health/prontidão ainda não aparecerem, aguardar e conferir novamente, sem
+iniciar os produtores. Não executar os quatro serviços simultaneamente com
+`--profile replay up` antes dessa conferência. A dependência service_started
+não comprova SUBACK e não foi apresentada como tal. Em caso de queda do broker,
+aguardar a confirmação de reconexão/assinatura, não uma linha antiga de logs.
+O teste automatizado temporário aguardou explicitamente Gateway pronto antes de
+iniciar o profile e também o SUBACK do assinante de observação.
+
+A porta 8080 precisa estar livre; não encerrar serviços externos para liberá-la.
+O exemplo usa HTTP deliberadamente indisponível dentro de cada contêiner.
+Nenhum envio/consulta ao InterSCity real foi realizado. O Backend devolve 200
+em `/api/health` e 502 em `/api/machines/latest` enquanto o middleware não está
+acessível. A fila não será drenada nessa configuração de segurança.
+
+Repetir os mesmos timestamps gera duplicatas ignoradas, não novas linhas. Para
+observar inserções em banco vazio, usar um projeto/volume novo; não apagar nem
+reutilizar o volume SIM-10.1 para isso. Não alterar o destino de um volume com
+pendências sem conferir seus UUIDs e conteúdo. A porta 8080 é fixa nesta etapa.
+
+### Resultados efetivamente observados
+
+Validação executada no projeto **sim102-validation**, com volume
+**sim102-validation_gateway_data**, sem reutilizar/montar o volume
+sim101-validation_gateway_data. O inspect deste último permaneceu inalterado.
+
+| Verificação | Resultado |
+| --- | --- |
+| compose config | Passou, quatro serviços; replay opcional |
+| Build Replayer/Backend | Makefiles existentes, sem warnings GCC; Bash 5.3.20 verificado |
+| up padrão | Mosquitto, Gateway e Backend ativos; nenhum Replayer iniciado |
+| Backend health | HTTP 200 com {"status":"ok"}; porta somente loopback |
+| Endpoint HTTP seguro | CLI dos dois serviços conferida com http://127.0.0.1:9; /latest retornou 502 |
+| Replay LIMIT=3 / INTERVAL_MS=1000 | Dez processos observados simultaneamente, IDs corretos |
+| Publicação | 30 PUBACKs e 30 mensagens observadas nos dez tópicos |
+| Integridade | Oito campos confrontados com CSV, tipos/timestamps/null e ordem por máquina preservados |
+| SQLite | 30 registros, três por ID; 1 inflight e 29 pending; cursor vazio; integridade ok |
+| Conclusão normal do launcher | Saída 0; dez filhos finalizados; RestartCount=0 |
+| SIGTERM do launcher (LIMIT=100) | Saída 143 esperada do trap; dez filhos coletados; nenhum reinício |
+| Backend SIGTERM/start | Saída 0, log encerrando backend, health 200 após reinício |
+| Regressão Gateway | SIGTERM=0, recriação preservou snapshot das 30 linhas, journal_mode=wal e integrity_check=ok |
+| down sem -v | Nenhum contêiner do projeto ativo; volume SIM-10.2 preservado |
+| Backend make test na imagem de build | 47 verificações passaram, só servidores falsos locais |
+| Replayer make test na imagem de build | Concluiu com código 0; SKIP parcial do locale numérico alternativo |
+
+Contagem observada no SQLite:
+
+```text
+1|3, 2|3, 3|3, 6|3, 7|3, 8|3, 9|3, 11|3, 12|3, 13|3
+inflight|1
+pending|29
+```
+
+A segunda execução, interrompida por sinal, repetiu timestamps já presentes e
+não criou registros adicionais. Os PIDs dos dez filhos foram conferidos como
+inexistentes após término normal e SIGTERM. O volume SIM-10.2 contém 30 amostras
+históricas de validação; não o apontar para a instância compartilhada. Ambos os
+volumes de validação permanecem para revisão; não foi usado down -v.
+
+O primeiro ensaio de `make test` do Replayer parou porque faltava `diff`, exigido
+pelo teste shell existente. A repetição instalou diffutils e Python somente no
+contêiner temporário de build e passou, sem editar testes. Essas ferramentas não
+foram adicionadas às imagens de runtime. O único SKIP foi locale alternativo
+indisponível, não considerado aprovado. As suítes completas MQTT/E2E do Gateway
+e MQTT do Replayer não foram repetidas; o cenário Compose acima exercitou
+publicação, recepção, persistência e sinais com executáveis reais. Não houve
+teste HTTPS real, dashboard, autenticação ou entrega externa nesta etapa.
+
+A prontidão do Gateway permanece uma verificação explícita do procedimento,
+não uma garantia automática do profile. Continuam as limitações SIM-09 e as
+ressalvas da base Arch/pacotes sem fixação por digest. `stop_grace_period` é de
+15 s no Replayer e 30 s no Backend/Gateway; respeitar os limites HTTP/DNS já
+documentados ao revisar esses valores. Nenhum serviço adicional foi criado.
+
+
+Para repetir as suítes locais nas imagens de build (Python/diffutils ficam só
+nos contêineres temporários e as requisições dos testes usam mocks locais):
+
+```sh
+docker build --target build -t sim102-backend-build backend
+docker run --rm \
+  --mount "type=bind,source=$(pwd)/backend/tests,target=/src/tests,readonly" \
+  --mount "type=bind,source=$(pwd)/config,target=/config,readonly" \
+  sim102-backend-build sh -ec 'pacman -S --noconfirm --needed python; make test'
+docker build --target build -t sim102-replayer-build dataset-replayer
+docker run --rm \
+  --mount "type=bind,source=$(pwd)/dataset-replayer/tests,target=/src/tests,readonly" \
+  --mount "type=bind,source=$(pwd)/dataset-replayer/scripts,target=/src/scripts,readonly" \
+  --mount "type=bind,source=$(pwd)/data,target=/data,readonly" \
+  sim102-replayer-build sh -ec 'pacman -S --noconfirm --needed python diffutils; make test'
+```
+
+O contêiner de teste usa rede para obter suas ferramentas; as suítes não acessam
+a instância real. Não executar o alvo `smoke-real` como parte desta validação.
