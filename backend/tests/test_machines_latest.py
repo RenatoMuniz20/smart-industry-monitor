@@ -29,6 +29,8 @@ FIXTURE = {
                 "sim_operating_state": [{"value": "IDLE", "date": "2024-01-01T00:21:00.000Z"}],
                 "sim_motor_temperature": [{"value": 49.51, "date": "2024-01-01T00:21:00.000Z"}],
                 "sim_current": [{"value": 3.2, "date": "2024-01-01T00:21:00.000Z"}],
+                "sim_vibration_rms": [{"value": 0.81, "date": "2024-01-01T00:21:00.000Z"}],
+                "sim_rpm": [{"value": 860.9, "date": "2024-01-01T00:21:00.000Z"}],
                 "sim_failure_within_24h": [{"value": 0, "date": "2024-01-01T00:21:00.000Z"}],
             },
         },
@@ -148,16 +150,20 @@ def main():
             assert m1["motor_temperature"]["value"] == 49.51
             assert m1["current"]["value"] == 3.2
             assert m1["failure_within_24h"]["value"] == 0
+            assert m1["vibration_rms"] == {"value": 0.81, "timestamp": "2024-01-01T00:21:00.000Z"}
+            assert m1["rpm"]["value"] == 860.9
             print("PASS: máquina 1 com texto, número, zero e timestamp corretos")
 
             m2 = data[1]
             assert m2["operating_state"]["value"] == "RUNNING"
             assert m2["current"] is None
+            assert m2["vibration_rms"] is None and m2["rpm"] is None
             print("PASS: capability ausente na resposta vira null")
 
             m3 = data[2]
             assert m3["uuid"] == UUID_C
             assert m3["operating_state"] is None and m3["motor_temperature"] is None
+            assert m3["vibration_rms"] is None and m3["rpm"] is None
             print("PASS: máquina sem dados no InterSCity vira nulls")
 
             assert RECEIVED and RECEIVED[-1] == (LAST_PATH, {"uuids": [UUID_A, UUID_B, UUID_C]}), RECEIVED[-1:]

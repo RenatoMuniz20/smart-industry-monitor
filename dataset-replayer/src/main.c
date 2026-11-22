@@ -86,6 +86,8 @@ static int select_row(const DatasetRow *row, void *context)
     char temperature[64];
     char current[64];
     char power[64];
+    char vibration[64];
+    char rpm[64];
 
     if (row->machine_id != state->machine_id) {
         return 0;
@@ -119,10 +121,12 @@ static int select_row(const DatasetRow *row, void *context)
     format_double(temperature, sizeof temperature, telemetry.temperature);
     format_double(current, sizeof current, telemetry.current);
     format_double(power, sizeof power, telemetry.power);
+    format_double(vibration, sizeof vibration, telemetry.vibration_rms);
+    format_double(rpm, sizeof rpm, telemetry.rpm);
     if (printf("timestamp=%s machine_id=%d machine_type=%s temperature=%s current=%s "
-               "power=%s state=%s failure_within_24h=%d\n",
+               "power=%s vibration_rms=%s rpm=%s state=%s failure_within_24h=%d\n",
                telemetry.timestamp, telemetry.machine_id, telemetry.machine_type,
-               temperature, current, power, format_state(telemetry.state),
+               temperature, current, power, vibration, rpm, format_state(telemetry.state),
                telemetry.failure_within_24h) < 0) {
         return -1;
     }

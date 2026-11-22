@@ -24,7 +24,8 @@ HIST_START = "2024-01-01T00:00:00"
 HIST_END = "2024-01-01T01:00:00"
 EMPTY_START = "2030-01-01T00:00:00"
 EMPTY_END = "2030-01-01T01:00:00"
-SERIES = ["operating_state", "motor_temperature", "current", "failure_within_24h"]
+SERIES = ["operating_state", "motor_temperature", "current", "vibration_rms", "rpm",
+          "failure_within_24h"]
 
 results = []
 
@@ -118,13 +119,14 @@ def main():
               "latest traz as mesmas máquinas, na mesma ordem")
 
         print("\nÚltimo valor por máquina:")
-        print(f"{'id':>3}  {'estado':<12} {'temp':>8}  {'corrente':>9}  timestamp")
+        print(f"{'id':>3}  {'estado':<12} {'temp':>8}  {'corrente':>9}  {'vibração':>9}  {'rpm':>7}  timestamp")
         for m in latest:
             def val(s):
                 return "-" if m[s] is None else m[s]["value"]
             ts = m["operating_state"]["timestamp"] if m["operating_state"] else "-"
             print(f"{m['machine_id']:>3}  {str(val('operating_state')):<12} "
-                  f"{str(val('motor_temperature')):>8}  {str(val('current')):>9}  {ts}")
+                  f"{str(val('motor_temperature')):>8}  {str(val('current')):>9}  "
+                  f"{str(val('vibration_rms')):>9}  {str(val('rpm')):>7}  {ts}")
         print()
         with_data = sum(1 for m in latest if m["operating_state"] is not None)
         check(with_data == len(expected), f"{with_data}/{len(expected)} máquinas com último valor")

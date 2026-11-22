@@ -12,17 +12,17 @@ timestamp,machine_id,machine_type,vibration_rms,temperature_motor,current_phase_
 2024-01-01 00:00:00,2,Pump,1,90,8,4,5,peak,6,7,8,2,none,0
 2024-01-01 00:01:00,1,Robotic Arm,1,49.7,3.5,4,5,idle,6,7,8,0,none,0
 2024-01-01 00:02:00,2,Pump,1,90,8,4,5,peak,6,7,8,0,none,0
-2024-01-01 00:03:00,1,Robotic Arm,1,,,4,5,normal,6,7,8,1,none,0
+2024-01-01 00:03:00,1,Robotic Arm,,,,4,,normal,6,7,8,1,none,0
 2024-01-01 00:04:00,1,Robotic Arm,1,50,4,4,5,peak,6,7,8,0,none,0
 2024-01-01 00:05:00,1,Robotic Arm,1,51,5,4,5,other,6,7,8,1,none,0
 2024-01-01 00:06:00,1,Robotic Arm,1,52,6,4,5,,6,7,8,0,none,0
 CSV
 cat > "$test_dir/rows" <<'EXPECTED'
-timestamp=2024-01-01 00:01:00 machine_id=1 machine_type=Robotic Arm temperature=49.7 current=3.5 power=N/A state=IDLE failure_within_24h=0
-timestamp=2024-01-01 00:03:00 machine_id=1 machine_type=Robotic Arm temperature=N/A current=N/A power=N/A state=NORMAL failure_within_24h=1
-timestamp=2024-01-01 00:04:00 machine_id=1 machine_type=Robotic Arm temperature=50 current=4 power=N/A state=PEAK failure_within_24h=0
-timestamp=2024-01-01 00:05:00 machine_id=1 machine_type=Robotic Arm temperature=51 current=5 power=N/A state=UNKNOWN failure_within_24h=1
-timestamp=2024-01-01 00:06:00 machine_id=1 machine_type=Robotic Arm temperature=52 current=6 power=N/A state=UNKNOWN failure_within_24h=0
+timestamp=2024-01-01 00:01:00 machine_id=1 machine_type=Robotic Arm temperature=49.7 current=3.5 power=N/A vibration_rms=1 rpm=5 state=IDLE failure_within_24h=0
+timestamp=2024-01-01 00:03:00 machine_id=1 machine_type=Robotic Arm temperature=N/A current=N/A power=N/A vibration_rms=N/A rpm=N/A state=NORMAL failure_within_24h=1
+timestamp=2024-01-01 00:04:00 machine_id=1 machine_type=Robotic Arm temperature=50 current=4 power=N/A vibration_rms=1 rpm=5 state=PEAK failure_within_24h=0
+timestamp=2024-01-01 00:05:00 machine_id=1 machine_type=Robotic Arm temperature=51 current=5 power=N/A vibration_rms=1 rpm=5 state=UNKNOWN failure_within_24h=1
+timestamp=2024-01-01 00:06:00 machine_id=1 machine_type=Robotic Arm temperature=52 current=6 power=N/A vibration_rms=1 rpm=5 state=UNKNOWN failure_within_24h=0
 EXPECTED
 cp "$test_dir/rows" "$test_dir/expected"
 echo 'Registros selecionados: 5' >> "$test_dir/expected"

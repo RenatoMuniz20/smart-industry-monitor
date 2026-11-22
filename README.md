@@ -43,6 +43,7 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | — | Escalabilidade | Pendente | — |
 | SIM-10.1 | Mosquitto e IoT Gateway em Compose com SQLite persistente | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
 | SIM-10.2 | Dataset Replayer e Backend REST no Compose | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
+| SIM-11 | Vibração (`vibration_rms`) e rotação (`rpm`) em todo o pipeline | Implementada; falta criar as capabilities na UFMA | [SIM-11](docs/sim-11-vibracao-rpm.md) |
 | — | Containerização do Dashboard e implantação em nuvem | Pendente | — |
 
 ## Estrutura do repositório
@@ -85,7 +86,7 @@ make -C iot-gateway test       # sem broker e sem rede externa
 make -C iot-gateway test-mqtt  # Mosquitto temporário em porta dinâmica
 make -C iot-gateway test-e2e   # dez produtores reais → Gateway
 
-make -C backend test           # 47 verificações; InterSCity falso em 127.0.0.1
+make -C backend test           # 51 verificações; InterSCity falso em 127.0.0.1
 make -C backend smoke-real     # manual: consulta a instância da UFMA (somente leitura)
 ```
 
@@ -125,6 +126,9 @@ amostras antigas podem ser reenviadas. Cuidados em
 
 ## Limitações atuais
 
+- O contrato de telemetria tem dez campos e usa 9 das 15 colunas do dataset
+  (timestamp, máquina, tipo, temperatura, corrente, vibração, rotação, modo de operação
+  e predição de falha); as outras seis colunas ficam fora do pipeline. Ver [SIM-11](docs/sim-11-vibracao-rpm.md).
 - `power` não existe no dataset e é publicado como `null`;
   `failure_within_24h` é uma predição do dataset, não uma falha medida.
 - No modo legado SIM-08 (sem `--queue-db`), a deduplicação é só em memória. A

@@ -24,7 +24,8 @@ INTERSCITY_URL="${INTERSCITY_URL:-https://cidadesinteligentes.lsdi.ufma.br/inter
 MAPPING_FILE="${MAPPING_FILE:-config/interscity/machines.conf}"
 DATASET_CSV="${DATASET_CSV:-data/predictive_maintenance_v3.csv}"
 
-CAPABILITIES=(sim_motor_temperature sim_current sim_operating_state sim_failure_within_24h)
+CAPABILITIES=(sim_motor_temperature sim_current sim_operating_state sim_failure_within_24h
+              sim_vibration_rms sim_rpm)  # as duas últimas: SIM-11 (create-interscity-capabilities.sh)
 DEFAULT_IDS=(1 2 3 6 7 8 9 11 12 13)
 LAT=-2.5580
 LON=-44.3090

@@ -18,6 +18,8 @@ int telemetry_normalize(const DatasetRow *row, Telemetry *out)
     normalized.temperature = row->temperature_motor;
     normalized.current = row->current_phase_avg;
     normalized.power = NAN;
+    normalized.vibration_rms = row->vibration_rms;
+    normalized.rpm = row->rpm;
     normalized.state = TELEMETRY_STATE_UNKNOWN;
     if (strcmp(row->operating_mode, "idle") == 0) {
         normalized.state = TELEMETRY_STATE_IDLE;

@@ -108,16 +108,21 @@ def publish(port, machine, payload):
 
 def telemetry(machine, **changes):
     sample = {'machine_id': machine, 'machine_type': 'CNC', 'timestamp': '2024-01-01 00:00:00',
-              'temperature': 49.51, 'current': 5.1, 'power': None, 'state': 'IDLE',
-              'failure_within_24h': 0}
+              'temperature': 49.51, 'current': 5.1, 'power': None, 'vibration_rms': 0.81,
+              'rpm': 860.9, 'state': 'IDLE', 'failure_within_24h': 0}
     sample.update(changes)
     return json.dumps(sample).encode()
 
 
-def expected_body(timestamp='2024-01-01T00:00:00', current=True, state='IDLE', failure=0):
+def expected_body(timestamp='2024-01-01T00:00:00', current=True, state='IDLE', failure=0,
+                  vibration=True, rpm=True):
     data = {'sim_motor_temperature': [{'value': 49.51, 'timestamp': timestamp}]}
     if current:
         data['sim_current'] = [{'value': 5.1, 'timestamp': timestamp}]
+    if vibration:  # SIM-11
+        data['sim_vibration_rms'] = [{'value': 0.81, 'timestamp': timestamp}]
+    if rpm:  # SIM-11
+        data['sim_rpm'] = [{'value': 860.9, 'timestamp': timestamp}]
     data['sim_operating_state'] = [{'value': state, 'timestamp': timestamp}]
     data['sim_failure_within_24h'] = [{'value': failure, 'timestamp': timestamp}]
     return {'data': data}

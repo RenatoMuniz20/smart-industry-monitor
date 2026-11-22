@@ -12,8 +12,10 @@ int main(void)
         .timestamp = "2024-01-01 00:21:00",
         .machine_id = 6,
         .machine_type = "Robotic Arm",
+        .vibration_rms = 0.81,
         .temperature_motor = 49.7,
         .current_phase_avg = 3.5,
+        .rpm = 860.9,
         .operating_mode = "normal",
         .failure_within_24h = 0
     };
@@ -34,6 +36,8 @@ int main(void)
     assert(out.temperature == 49.7);
     assert(out.current == 3.5);
     assert(isnan(out.power));
+    assert(out.vibration_rms == 0.81);
+    assert(out.rpm == 860.9);
     assert(out.state == TELEMETRY_STATE_NORMAL);
     assert(out.failure_within_24h == 0);
 
@@ -57,6 +61,11 @@ int main(void)
     assert(isnan(out.temperature));
     assert(isnan(out.current));
     assert(isnan(out.power));
+    assert(out.vibration_rms == 0.81 && out.rpm == 860.9);
+    row.vibration_rms = NAN;
+    row.rpm = NAN;
+    assert(telemetry_normalize(&row, &out) == 0);
+    assert(isnan(out.vibration_rms) && isnan(out.rpm));
 
     memset(row.machine_type, 'm', sizeof row.machine_type - 1);
     row.machine_type[sizeof row.machine_type - 1] = '\0';

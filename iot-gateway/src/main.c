@@ -129,7 +129,8 @@ static int close_queue(TelemetryQueue **queue)
 static int log_telemetry(const GatewayTelemetry *t)
 {
     static const char *keys[] = {"machine_id", "machine_type", "timestamp", "temperature",
-                                 "current", "power", "state", "failure_within_24h"};
+                                 "current", "power", "vibration_rms", "rpm", "state",
+                                 "failure_within_24h"};
     struct json_object *root = json_object_new_object();
     if (root == NULL) return -1;
     struct json_object *values[] = {
@@ -138,12 +139,15 @@ static int log_telemetry(const GatewayTelemetry *t)
         t->temperature_present ? json_object_new_double(t->temperature) : NULL,
         t->current_present ? json_object_new_double(t->current) : NULL,
         t->power_present ? json_object_new_double(t->power) : NULL,
+        t->vibration_rms_present ? json_object_new_double(t->vibration_rms) : NULL,
+        t->rpm_present ? json_object_new_double(t->rpm) : NULL,
         json_object_new_string(t->state), json_object_new_int(t->failure_within_24h)
     };
     const int nullable[] = {0, 0, 0, !t->temperature_present, !t->current_present,
-                             !t->power_present, 0, 0};
+                             !t->power_present, !t->vibration_rms_present, !t->rpm_present,
+                             0, 0};
     int result = -1;
-    for (size_t i = 0; i < 8; ++i) {
+    for (size_t i = 0; i < 10; ++i) {
         if (values[i] == NULL && !nullable[i]) goto done;
         if (json_object_object_add(root, keys[i], values[i]) != 0) goto done;
         values[i] = NULL; /* Ownership transferred to root. */
@@ -153,7 +157,7 @@ static int log_telemetry(const GatewayTelemetry *t)
         result = 0;
     }
 done:
-    for (size_t i = 0; i < 8; ++i) json_object_put(values[i]);
+    for (size_t i = 0; i < 10; ++i) json_object_put(values[i]);
     json_object_put(root);
     return result;
 }

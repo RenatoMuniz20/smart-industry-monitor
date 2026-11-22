@@ -36,7 +36,9 @@ Exemplo de `/api/machines/latest` (valores reais de 15/11/2026):
   "failure_within_24h":{"value":0,"timestamp":"2024-01-01T00:21:00.000Z"}}, ...]}
 ```
 
-Exemplo de histórico: `series` tem as chaves `operating_state`, `motor_temperature`, `current` e `failure_within_24h`. Cada item é `{"timestamp": ..., "value": ...}`.
+Exemplo de histórico: `series` tem as chaves `operating_state`, `motor_temperature`, `current`, `vibration_rms`, `rpm` e `failure_within_24h`.
+
+Desde a SIM-11, `/latest` também traz `vibration_rms` e `rpm`, no mesmo formato das outras medições (`null` quando não há dado). Ver [SIM-11](sim-11-vibracao-rpm.md). Cada item é `{"timestamp": ..., "value": ...}`.
 
 ## Regras de dados
 - **Último valor:** cada máquina tem seu próprio timestamp. Capability ausente ou máquina sem dados vira `null`.

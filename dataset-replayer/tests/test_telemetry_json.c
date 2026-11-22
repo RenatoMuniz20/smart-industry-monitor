@@ -39,7 +39,8 @@ int main(void)
     Telemetry t = {
         .machine_id = 6, .machine_type = "Robotic Arm",
         .timestamp = "2024-01-01 00:21:00", .temperature = 49.5,
-        .current = 3.5, .power = 100, .state = TELEMETRY_STATE_NORMAL,
+        .current = 3.5, .power = 100, .vibration_rms = 0.75, .rpm = 860.5,
+        .state = TELEMETRY_STATE_NORMAL,
         .failure_within_24h = 1
     };
     char json[2048];
@@ -47,9 +48,10 @@ int main(void)
     const char *expected =
         "{\"machine_id\":6,\"machine_type\":\"Robotic Arm\","
         "\"timestamp\":\"2024-01-01 00:21:00\",\"temperature\":49.5,"
-        "\"current\":3.5,\"power\":100,\"state\":\"NORMAL\",\"failure_within_24h\":1}";
+        "\"current\":3.5,\"power\":100,\"vibration_rms\":0.75,\"rpm\":860.5,"
+        "\"state\":\"NORMAL\",\"failure_within_24h\":1}";
     assert(telemetry_to_json(&t, json, sizeof json) == 0);
-    /* Exact equality verifies all eight keys, types, values and punctuation. */
+    /* Exact equality verifies all ten keys, types, values and punctuation. */
     assert(strcmp(json, expected) == 0);
     assert(telemetry_to_json(&t, json, strlen(expected) + 1) == 0);
     expect_error(&t, strlen(expected));
@@ -70,8 +72,11 @@ int main(void)
         t.temperature = nonfinite[i];
         t.current = nonfinite[(i + 1) % 3];
         t.power = nonfinite[(i + 2) % 3];
+        t.vibration_rms = nonfinite[i];
+        t.rpm = nonfinite[(i + 1) % 3];
         assert(telemetry_to_json(&t, json, sizeof json) == 0);
-        assert(strstr(json, "\"temperature\":null,\"current\":null,\"power\":null,") != NULL);
+        assert(strstr(json, "\"temperature\":null,\"current\":null,\"power\":null,"
+                            "\"vibration_rms\":null,\"rpm\":null,") != NULL);
     }
     const char *states[] = {"UNKNOWN", "IDLE", "NORMAL", "PEAK", "UNKNOWN"};
     for (int i = 0; i < 5; ++i) {
@@ -162,7 +167,8 @@ int main(void)
     DatasetRow row = {
         .machine_id = 6, .machine_type = "Robotic Arm",
         .timestamp = "2024-01-01 00:21:00", .temperature_motor = 49.5,
-        .current_phase_avg = 3.5, .operating_mode = "normal", .failure_within_24h = 1
+        .current_phase_avg = 3.5, .vibration_rms = 0.75, .rpm = NAN,
+        .operating_mode = "normal", .failure_within_24h = 1
     };
     assert(telemetry_normalize(&row, &t) == 0);
     Telemetry original;
@@ -172,7 +178,8 @@ int main(void)
     assert(strcmp(json,
         "{\"machine_id\":6,\"machine_type\":\"Robotic Arm\","
         "\"timestamp\":\"2024-01-01 00:21:00\",\"temperature\":49.5,"
-        "\"current\":3.5,\"power\":null,\"state\":\"NORMAL\",\"failure_within_24h\":1}") == 0);
+        "\"current\":3.5,\"power\":null,\"vibration_rms\":0.75,\"rpm\":null,"
+        "\"state\":\"NORMAL\",\"failure_within_24h\":1}") == 0);
     puts("Todos os testes de telemetry_json passaram.");
     return 0;
 }

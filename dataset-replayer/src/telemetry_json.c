@@ -8,7 +8,7 @@
 #include <string.h>
 
 /* Each 63-byte text expands to at most 378 bytes plus quotes. The two
- * escaped strings, keys, punctuation, states, integers and three scientific
+ * escaped strings, keys, punctuation, states, integers and five scientific
  * double representations fit well within 2048 bytes on the Linux target.
  * Every formatting operation is checked even if these bounds change.
  */
@@ -93,6 +93,8 @@ int telemetry_to_json(const Telemetry *telemetry, char *buffer, size_t capacity)
     char temperature[DBL_DECIMAL_DIG + 32];
     char current[DBL_DECIMAL_DIG + 32];
     char power[DBL_DECIMAL_DIG + 32];
+    char vibration[DBL_DECIMAL_DIG + 32];
+    char rpm[DBL_DECIMAL_DIG + 32];
     char json[JSON_CAPACITY];
     const char *state;
     locale_t numeric_locale;
@@ -127,7 +129,9 @@ int telemetry_to_json(const Telemetry *telemetry, char *buffer, size_t capacity)
     }
     result = format_number(telemetry->temperature, temperature, sizeof temperature);
     if (format_number(telemetry->current, current, sizeof current) != 0 ||
-        format_number(telemetry->power, power, sizeof power) != 0) {
+        format_number(telemetry->power, power, sizeof power) != 0 ||
+        format_number(telemetry->vibration_rms, vibration, sizeof vibration) != 0 ||
+        format_number(telemetry->rpm, rpm, sizeof rpm) != 0) {
         result = -1;
     }
     if (uselocale(previous) == (locale_t)0) {
@@ -141,9 +145,10 @@ int telemetry_to_json(const Telemetry *telemetry, char *buffer, size_t capacity)
     length = snprintf(json, sizeof json,
         "{\"machine_id\":%d,\"machine_type\":%s,\"timestamp\":%s,"
         "\"temperature\":%s,\"current\":%s,\"power\":%s,"
+        "\"vibration_rms\":%s,\"rpm\":%s,"
         "\"state\":\"%s\",\"failure_within_24h\":%d}",
         telemetry->machine_id, machine_type, timestamp, temperature, current,
-        power, state, telemetry->failure_within_24h);
+        power, vibration, rpm, state, telemetry->failure_within_24h);
     if (length < 0 || (size_t)length >= sizeof json || (size_t)length >= capacity) {
         return -1;
     }

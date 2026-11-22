@@ -8,12 +8,22 @@
 #include <string.h>
 
 static const char topic[] = "smart-industry/machines/1/telemetry";
-/* Real SIM-03 message, recorded in docs/sim-03-validacao.md. */
+/* Real SIM-03 message (docs/sim-03-validacao.md) plus the SIM-11 fields,
+ * with the values of the same CSV row (vibration_rms 0.81, rpm 860.9). */
 static const char fixture[] =
     "{\"machine_id\":1,\"machine_type\":\"CNC\",\"timestamp\":\"2024-01-01 00:00:00\","
-    "\"temperature\":49.51,\"current\":5.1,\"power\":null,\"state\":\"IDLE\",\"failure_within_24h\":0}";
+    "\"temperature\":49.51,\"current\":5.1,\"power\":null,\"vibration_rms\":0.81,\"rpm\":860.9,"
+    "\"state\":\"IDLE\",\"failure_within_24h\":0}";
+/* Same order as the parser: measurements are 3, 4, 5, 8 and 9. */
 static const char *keys[] = {"machine_id", "machine_type", "timestamp", "temperature",
-                           "current", "power", "state", "failure_within_24h"};
+                           "current", "power", "state", "failure_within_24h",
+                           "vibration_rms", "rpm"};
+#define KEY_COUNT (sizeof keys / sizeof keys[0])
+
+static int is_measurement(size_t i)
+{
+    return (i >= 3 && i <= 5) || i >= 8;
+}
 
 static void fail(const char *t, const void *payload, size_t length,
                  GatewayTelemetryError expected)
@@ -79,7 +89,8 @@ static void test_strict_inputs(void)
     for (size_t i = 0; i < sizeof numbers / sizeof numbers[0]; ++i) {
         snprintf(payload, sizeof payload,
             "{\"machine_id\":1,\"machine_type\":\"CNC\",\"timestamp\":\"original\","
-            "\"temperature\":%s,\"current\":null,\"power\":null,\"state\":\"IDLE\",\"failure_within_24h\":0}", numbers[i]);
+            "\"temperature\":%s,\"current\":null,\"power\":null,\"vibration_rms\":null,\"rpm\":null,"
+            "\"state\":\"IDLE\",\"failure_within_24h\":0}", numbers[i]);
         accepted += strict_rejection(numbers[i], payload);
     }
     fflush(stdout);
@@ -96,7 +107,8 @@ static void test_valid_lexemes(void)
     for (size_t i = 0; i < sizeof numbers / sizeof numbers[0]; ++i) {
         snprintf(payload, sizeof payload,
             "{\"machine_id\":1,\"machine_type\":\"Pump's 01 1. -01\",\"timestamp\":\"original\","
-            "\"temperature\":%s,\"current\":null,\"power\":null,\"state\":\"IDLE\",\"failure_within_24h\":0}", numbers[i]);
+            "\"temperature\":%s,\"current\":null,\"power\":null,\"vibration_rms\":null,\"rpm\":null,"
+            "\"state\":\"IDLE\",\"failure_within_24h\":0}", numbers[i]);
         assert(gateway_telemetry_parse(topic, payload, strlen(payload), &out, NULL) == 0);
         assert(out.temperature_present && out.temperature == expected[i]);
         assert(strcmp(out.machine_type, "Pump's 01 1. -01") == 0);
@@ -132,6 +144,8 @@ int main(void)
     assert(out.temperature_present && out.temperature == 49.51);
     assert(out.current_present && out.current == 5.1);
     assert(!out.power_present && out.power == 0);
+    assert(out.vibration_rms_present && out.vibration_rms == 0.81);
+    assert(out.rpm_present && out.rpm == 860.9);
     char unterminated[sizeof fixture - 1];
     memcpy(unterminated, fixture, sizeof unterminated);
     assert(gateway_telemetry_parse(topic, unterminated, sizeof unterminated, &out, NULL) == 0);
@@ -145,7 +159,7 @@ int main(void)
         assert(strcmp(out.state, states[i]) == 0 && out.failure_within_24h == (int)(i % 2));
         json_object_put(root);
     }
-    for (size_t i = 0; i < 8; ++i) {
+    for (size_t i = 0; i < KEY_COUNT; ++i) {
         struct json_object *root = json_tokener_parse(fixture);
         json_object_object_del(root, keys[i]);
         fail_object(root, GATEWAY_TELEMETRY_INVALID_FIELDS);
@@ -158,7 +172,7 @@ int main(void)
         json_object_object_add(root, keys[i], json_object_new_object());
         fail_object(root, GATEWAY_TELEMETRY_INVALID_TYPE);
         json_object_object_add(root, keys[i], NULL);
-        if (i >= 3 && i <= 5) success(root);
+        if (is_measurement(i)) success(root);
         else fail_object(root, GATEWAY_TELEMETRY_INVALID_TYPE);
         json_object_put(root);
     }
@@ -184,24 +198,32 @@ int main(void)
     json_object_object_add(root, "failure_within_24h", json_object_new_string("1"));
     fail_object(root, GATEWAY_TELEMETRY_INVALID_TYPE);
     json_object_object_add(root, "failure_within_24h", json_object_new_int(1));
-    for (size_t i = 3; i <= 5; ++i) {
+    static const size_t measurements[] = {3, 4, 5, 8, 9};
+    for (size_t m = 0; m < sizeof measurements / sizeof measurements[0]; ++m) {
+        size_t i = measurements[m];
         json_object_object_add(root, keys[i], json_object_new_string("12.5"));
         fail_object(root, GATEWAY_TELEMETRY_INVALID_TYPE);
         json_object_object_add(root, keys[i], json_object_new_double(-12.5));
         out = success(root);
-        const double readings[] = {out.temperature, out.current, out.power};
-        const bool present[] = {out.temperature_present, out.current_present, out.power_present};
-        assert(readings[i - 3] == -12.5 && present[i - 3]);
+        const double readings[] = {out.temperature, out.current, out.power,
+                                   out.vibration_rms, out.rpm};
+        const bool present[] = {out.temperature_present, out.current_present, out.power_present,
+                                out.vibration_rms_present, out.rpm_present};
+        assert(readings[m] == -12.5 && present[m]);
         json_object_object_add(root, keys[i], json_object_new_int(0));
         out = success(root);
-        const double zeros[] = {out.temperature, out.current, out.power};
-        const bool zero_present[] = {out.temperature_present, out.current_present, out.power_present};
-        assert(zeros[i - 3] == 0 && zero_present[i - 3]);
+        const double zeros[] = {out.temperature, out.current, out.power,
+                                out.vibration_rms, out.rpm};
+        const bool zero_present[] = {out.temperature_present, out.current_present,
+                                     out.power_present, out.vibration_rms_present, out.rpm_present};
+        assert(zeros[m] == 0 && zero_present[m]);
         json_object_object_add(root, keys[i], NULL);
     }
     out = success(root);
     assert(!out.temperature_present && !out.current_present && !out.power_present);
+    assert(!out.vibration_rms_present && !out.rpm_present);
     assert(out.temperature == 0 && out.current == 0 && out.power == 0);
+    assert(out.vibration_rms == 0 && out.rpm == 0);
     const char *text_keys[] = {"machine_type", "timestamp"};
     char text[65];
     memset(text, 'a', 64);
@@ -260,7 +282,8 @@ int main(void)
     for (size_t i = 0; i < 4; ++i) {
         snprintf(buffer, sizeof buffer,
             "{\"machine_id\":1,\"machine_type\":\"CNC\",\"timestamp\":\"original\","
-            "\"temperature\":%s,\"current\":null,\"power\":null,\"state\":\"IDLE\",\"failure_within_24h\":0}", nonfinite[i]);
+            "\"temperature\":%s,\"current\":null,\"power\":null,\"vibration_rms\":null,\"rpm\":null,"
+            "\"state\":\"IDLE\",\"failure_within_24h\":0}", nonfinite[i]);
         GatewayTelemetryError error;
         assert(gateway_telemetry_parse(topic, buffer, strlen(buffer), &out, &error) == -1);
     }

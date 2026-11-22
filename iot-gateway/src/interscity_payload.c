@@ -131,8 +131,12 @@ int interscity_payload_build(const GatewayTelemetry *telemetry, char *out, size_
     }
     char temperature[NUMBER_CAPACITY];
     char current[NUMBER_CAPACITY];
+    char vibration[NUMBER_CAPACITY];
+    char rpm[NUMBER_CAPACITY];
     if ((telemetry->temperature_present && format_double(telemetry->temperature, temperature) != 0) ||
         (telemetry->current_present && format_double(telemetry->current, current) != 0) ||
+        (telemetry->vibration_rms_present && format_double(telemetry->vibration_rms, vibration) != 0) ||
+        (telemetry->rpm_present && format_double(telemetry->rpm, rpm) != 0) ||
         (telemetry->failure_within_24h != 0 && telemetry->failure_within_24h != 1)) {
         return finish(error, INTERSCITY_PAYLOAD_VALUE);
     }
@@ -153,6 +157,15 @@ int interscity_payload_build(const GatewayTelemetry *telemetry, char *out, size_
     if (!failed && telemetry->current_present) {
         failed = add_sample(data, INTERSCITY_CAP_CURRENT,
                             json_object_new_double_s(telemetry->current, current), timestamp) != 0;
+    }
+    if (!failed && telemetry->vibration_rms_present) {
+        failed = add_sample(data, INTERSCITY_CAP_VIBRATION_RMS,
+                            json_object_new_double_s(telemetry->vibration_rms, vibration),
+                            timestamp) != 0;
+    }
+    if (!failed && telemetry->rpm_present) {
+        failed = add_sample(data, INTERSCITY_CAP_RPM,
+                            json_object_new_double_s(telemetry->rpm, rpm), timestamp) != 0;
     }
     if (!failed) {
         failed = add_sample(data, INTERSCITY_CAP_OPERATING_STATE,

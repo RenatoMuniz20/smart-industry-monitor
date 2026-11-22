@@ -51,12 +51,14 @@ valor ausente, não zero. Campos inteiros vazios ou inválidos causam erro.
 O módulo independente `telemetry.h` oferece
 `int telemetry_normalize(const DatasetRow *row, Telemetry *out)`, chamado pelo
 `main.c` após o filtro por máquina. `Telemetry` contém `machine_id`, `machine_type`,
-`timestamp`, `temperature`, `current`, `power`, `state` e `failure_within_24h`.
+`timestamp`, `temperature`, `current`, `power`, `vibration_rms`, `rpm`, `state` e
+`failure_within_24h` (os dois antes de `state` entraram na SIM-11).
 Os textos são copiados para arrays próprios de 64 bytes; o timestamp é
 preservado sem conversão ou adição de fuso horário.
 
-`temperature_motor` vira `temperature` e `current_phase_avg` vira `current`,
-preservando valores e `NAN`, sem conversão de unidades. `power` é sempre `NAN`,
+`temperature_motor` vira `temperature` e `current_phase_avg` vira `current`;
+`vibration_rms` e `rpm` mantêm o nome do CSV. Todos preservam valores e `NAN`,
+sem conversão de unidades (o dataset não informa a unidade da vibração). `power` é sempre `NAN`,
 pois o dataset não fornece potência diretamente. Os modos exatos `idle`,
 `normal` e `peak` viram `TELEMETRY_STATE_IDLE`, `TELEMETRY_STATE_NORMAL` e
 `TELEMETRY_STATE_PEAK`; qualquer outro texto, inclusive vazio, vira
@@ -93,13 +95,13 @@ O buffer inteiro permanece inalterado em erro. Os arrays textuais devem conter
 terminador dentro de seus 64 bytes e UTF-8 válido. Aspas, barras invertidas e
 caracteres de controle são escapados; UTF-8 válido é preservado.
 
-Exemplo de saída (exatamente oito propriedades):
+Exemplo de saída (exatamente dez propriedades):
 
 ```json
-{"machine_id":6,"machine_type":"Robotic Arm","timestamp":"2024-01-01 00:21:00","temperature":49.5,"current":3.5,"power":null,"state":"NORMAL","failure_within_24h":1}
+{"machine_id":6,"machine_type":"Robotic Arm","timestamp":"2024-01-01 00:21:00","temperature":49.5,"current":3.5,"power":null,"vibration_rms":0.75,"rpm":860.5,"state":"NORMAL","failure_within_24h":1}
 ```
 
-Os três campos `double` são números ou `null`: `NAN` e ambos os infinitos viram
+Os cinco campos `double` são números ou `null`: `NAN` e ambos os infinitos viram
 `null`, sem omitir propriedades. `power` normalmente é `null`, conforme a
 normalização. O timestamp permanece intacto, sem presumir fuso horário.
 Estados são `UNKNOWN`, `IDLE`, `NORMAL` ou `PEAK`; enumerações não reconhecidas

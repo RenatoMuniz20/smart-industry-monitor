@@ -106,6 +106,7 @@ def ten_machines(root, port):
                     assert machine in IDS
                     assert topic == f'smart-industry/machines/{machine}/telemetry'
                     assert data['power'] is None
+                    assert 'vibration_rms' in data and 'rpm' in data
                     grouped[machine].append(data)
             for machine, records in grouped.items():
                 assert len(records) == 3
