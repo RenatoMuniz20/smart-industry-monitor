@@ -15,7 +15,7 @@ Backend em C (libmicrohttpd + libcurl + json-c)
   → GET /api/machines/latest
   → GET /api/machines/{id}/history?start=&end=
         ↓
-Dashboard (SIM-07, pendente)
+Dashboard (SIM-07, docs/sim-07-dashboard.md)
 ```
 
 ## Endpoints

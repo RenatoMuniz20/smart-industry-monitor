@@ -57,9 +57,10 @@ static int install_signal_handlers(void)
 static void usage(const char *prog)
 {
     printf("Uso: %s [--port N] [--bind IP] [--machines ARQUIVO] [--interscity-url URL]"
-           " [--interscity-timeout-ms N]\n", prog);
+           " [--interscity-timeout-ms N] [--web-root PASTA]\n", prog);
     printf("Padrões: porta %ld, bind %s (só localhost). Use --bind 0.0.0.0 para aceitar"
            " conexões da rede.\n", DEFAULT_PORT, DEFAULT_BIND);
+    printf("--web-root: pasta do dashboard (ex.: ../dashboard); sem ela, só a API é servida.\n");
 }
 
 int main(int argc, char **argv)
@@ -69,6 +70,7 @@ int main(int argc, char **argv)
     const char *bind_addr = DEFAULT_BIND;
     const char *machines_path = DEFAULT_MACHINES;
     const char *interscity_url = DEFAULT_INTERSCITY_URL;
+    const char *web_root = NULL;
     MachineEntry machines[MAX_MACHINES];
     size_t machine_count = 0;
     RouteContext ctx;
@@ -100,6 +102,8 @@ int main(int argc, char **argv)
             interscity_url = argv[i + 1];
         } else if (strcmp(argv[i], "--machines") == 0) {
             machines_path = argv[i + 1];
+        } else if (strcmp(argv[i], "--web-root") == 0) {
+            web_root = argv[i + 1];
         } else {
             fprintf(stderr, "argumento desconhecido: %s\n", argv[i]);
             usage(argv[0]);
@@ -124,7 +128,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (http_server_start(&server, bind_addr, (uint16_t)port, routes_handle, &ctx,
+    if (http_server_start(&server, bind_addr, (uint16_t)port, web_root, routes_handle, &ctx,
                           error, sizeof error) != 0) {
         fprintf(stderr, "erro: %s\n", error);
         return 1;
@@ -132,6 +136,9 @@ int main(int argc, char **argv)
 
     printf("backend escutando em %s:%u com %zu máquinas\n",
            bind_addr, (unsigned int)port, machine_count);
+    if (web_root != NULL) {
+        printf("dashboard em http://%s:%u/ (pasta %s)\n", bind_addr, (unsigned int)port, web_root);
+    }
     fflush(stdout);
 
     while (!stop_requested) {

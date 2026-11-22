@@ -1,4 +1,5 @@
 #include "http_server.h"
+#include "static_files.h"
 
 #include <arpa/inet.h>
 #include <microhttpd.h>
@@ -15,6 +16,8 @@ struct HttpServer {
     struct MHD_Daemon *daemon;
     HttpRouteFn route;
     void *cls;
+    int has_web_root;
+    char web_root[STATIC_ROOT_MAX];
 };
 
 static void set_error(char *error, size_t error_size, const char *message)
@@ -42,6 +45,46 @@ static enum MHD_Result send_json(struct MHD_Connection *connection,
     return ret;
 }
 
+/* Dashboard (SIM-07): arquivos da pasta configurada, fora de /api/. */
+static int is_api_url(const char *url)
+{
+    return strcmp(url, "/api") == 0 || strncmp(url, "/api/", 5) == 0;
+}
+
+static enum MHD_Result send_static(HttpServer *server, struct MHD_Connection *connection,
+                                   const char *url, const char *method)
+{
+    struct MHD_Response *response;
+    StaticFile file;
+    const char *type;
+    unsigned int status;
+    enum MHD_Result ret;
+
+    if (strcmp(method, "GET") != 0 && strcmp(method, "HEAD") != 0) {
+        return send_json(connection, 405, "{\"error\":\"método não permitido\"}");
+    }
+    status = static_file_load(server->web_root, url, &file);
+    if (status == 404) {
+        return send_json(connection, 404, "{\"error\":\"não encontrado\"}");
+    }
+    if (status != 200) {
+        return send_json(connection, 500, "{\"error\":\"erro interno\"}");
+    }
+    /* MUST_COPY: a resposta guarda a própria cópia; o tipo é texto fixo. */
+    type = file.content_type;
+    response = MHD_create_response_from_buffer(file.length, file.data, MHD_RESPMEM_MUST_COPY);
+    static_file_free(&file);
+    if (response == NULL) {
+        return MHD_NO;
+    }
+    (void)MHD_add_response_header(response, "Content-Type", type);
+    (void)MHD_add_response_header(response, "Cache-Control", "no-cache");
+    (void)MHD_add_response_header(response, "X-Content-Type-Options", "nosniff");
+    ret = MHD_queue_response(connection, 200, response);
+    MHD_destroy_response(response);
+    return ret;
+}
+
 static const char *request_arg(const HttpRequest *req, const char *key)
 {
     return MHD_lookup_connection_value((struct MHD_Connection *)req->conn,
@@ -63,6 +106,10 @@ static enum MHD_Result handle_request(void *cls, struct MHD_Connection *connecti
     (void)upload_data;
     (void)upload_data_size;
     (void)con_cls;
+
+    if (server->has_web_root && !is_api_url(url)) {
+        return send_static(server, connection, url, method);
+    }
 
     body = malloc(BODY_SIZE);
     if (body == NULL) {
@@ -87,7 +134,8 @@ static enum MHD_Result handle_request(void *cls, struct MHD_Connection *connecti
 }
 
 int http_server_start(HttpServer **out, const char *bind_addr, uint16_t port,
-                      HttpRouteFn route, void *cls, char *error, size_t error_size)
+                      const char *web_root, HttpRouteFn route, void *cls,
+                      char *error, size_t error_size)
 {
     HttpServer *server;
     struct MHD_Daemon *daemon;
@@ -116,6 +164,15 @@ int http_server_start(HttpServer **out, const char *bind_addr, uint16_t port,
     }
     server->route = route;
     server->cls = cls;
+    if (web_root != NULL) {
+        if (static_root_init(web_root, server->web_root, sizeof server->web_root) != 0) {
+            free(server);
+            snprintf(message, sizeof message, "pasta do dashboard inválida: %s", web_root);
+            set_error(error, error_size, message);
+            return -1;
+        }
+        server->has_web_root = 1;
+    }
 
     daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, port, NULL, NULL,
                               &handle_request, server,

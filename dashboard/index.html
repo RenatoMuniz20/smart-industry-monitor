@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Industry Monitor</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>Smart Industry Monitor</h1>
+        <p class="subtitle">Telemetria das máquinas via InterSCity · atualiza a cada 5 s</p>
+      </div>
+    </div>
+    <div id="connection" class="connection" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="connection-text">Conectando…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary" aria-label="Resumo">
+      <div class="tile"><span class="tile-value" id="sum-total">–</span><span class="tile-label">Máquinas</span></div>
+      <div class="tile"><span class="tile-value" id="sum-good">–</span><span class="tile-label"><span class="icon good" aria-hidden="true">✓</span>Normais</span></div>
+      <div class="tile"><span class="tile-value" id="sum-alert">–</span><span class="tile-label"><span class="icon serious" aria-hidden="true">!</span>Em alerta</span></div>
+      <div class="tile"><span class="tile-value" id="sum-critical">–</span><span class="tile-label"><span class="icon critical" aria-hidden="true">✖</span>Falha prevista</span></div>
+      <div class="tile"><span class="tile-value" id="sum-nodata">–</span><span class="tile-label"><span class="icon nodata" aria-hidden="true">–</span>Sem dados</span></div>
+    </section>
+
+    <p class="legend-note">
+      Limites de alerta: temperatura acima de 75 °C · vibração RMS acima de 3,8 ·
+      estado <strong>PEAK</strong> = sobrecarga · falha prevista pelo dataset nas próximas 24 h.
+      Clique em uma máquina para ver o histórico.
+    </p>
+
+    <section id="grid" class="grid" aria-label="Máquinas"></section>
+
+    <section id="history" class="history" hidden aria-labelledby="history-title">
+      <div class="history-head">
+        <div>
+          <h2 id="history-title">Histórico</h2>
+          <p id="history-range" class="muted"></p>
+        </div>
+        <div class="history-controls">
+          <div class="segmented" role="group" aria-label="Janela de tempo">
+            <button type="button" data-window="60">1 h</button>
+            <button type="button" data-window="360">6 h</button>
+            <button type="button" data-window="1440">24 h</button>
+          </div>
+          <button type="button" id="history-table-toggle" class="ghost" aria-pressed="false">Tabela</button>
+          <button type="button" id="history-close" class="ghost" aria-label="Fechar histórico">Fechar</button>
+        </div>
+      </div>
+      <p id="history-message" class="message" hidden></p>
+      <div id="history-charts" class="charts"></div>
+      <div id="history-table" class="table-wrap" hidden></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    UFMA · Sistemas Distribuídos · horários do dataset em UTC
+  </footer>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>
