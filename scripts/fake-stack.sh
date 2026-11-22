@@ -63,9 +63,15 @@ case "${1:-}" in
         echo "Replayer iniciado (LIMIT=${LIMIT:-60} por máquina, INTERVAL_MS=${INTERVAL_MS:-1000}). Acompanhe com: $0 stats"
         ;;
     stats)
+        echo "InterSCity falso:"
         curl -fsS "http://127.0.0.1:${fake_port}/__fake/stats"; echo
+        # Itens confirmados (HTTP 201) saem da fila; fila vazia = tudo entregue.
+        queue=$(compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
+            "SELECT status || ': ' || COUNT(*) FROM telemetry_queue GROUP BY status;" 2>&1) || true
+        echo "Fila do gateway: ${queue:-vazia (tudo entregue)}"
+        echo "Último timestamp entregue por máquina:"
         compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
-            "SELECT status, COUNT(*) FROM telemetry_queue GROUP BY status;" || true
+            "SELECT '  máquina ' || machine_id || ': ' || last_timestamp FROM delivered_cursor ORDER BY machine_id;" || true
         ;;
     logs)
         compose logs --tail="${TAIL:-30}" interscity-fake gateway backend
