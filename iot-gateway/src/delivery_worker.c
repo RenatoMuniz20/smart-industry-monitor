@@ -14,6 +14,10 @@
 #include <string.h>
 #include <time.h>
 
+/* Both waits are interruptible and hold no SQLite transaction. */
+#define RECONCILE_INITIAL_MS 2000u
+#define CONSISTENCY_WINDOW_MS 2000u
+
 struct DeliveryWorker {
     pthread_t thread;
     atomic_bool stop;
@@ -21,7 +25,7 @@ struct DeliveryWorker {
     atomic_bool ready;
     char *path;
     InterscityClient *client; /* Created before pthread_create; used only by run. */
-    unsigned long delivered, retried, blocked, suspended; /* Read only after join. */
+    unsigned long delivered, retried, blocked, recovered; /* Read only after join. */
 };
 
 static void fatal(DeliveryWorker *w, const char *operation, const TelemetryQueueError *error)
@@ -52,6 +56,71 @@ static int pause_ms(DeliveryWorker *w, unsigned milliseconds)
     return 0;
 }
 
+static unsigned next_delay(unsigned delay_ms)
+{
+    return delay_ms >= 16000 ? 30000 : delay_ms * 2;
+}
+
+/* Resolve only the FIFO head. Failure to consult never means absence. Two
+ * consecutive absent/older answers are required before authorizing a retry;
+ * a failed consultation resets that evidence. /last cannot prove contents. */
+static void reconcile(DeliveryWorker *w, TelemetryQueue *queue,
+                      const TelemetryQueueItem *item, unsigned *delay_ms)
+{
+    int absence_seen = 0;
+    fprintf(stderr, "Worker HTTP: id=%" PRId64 " inflight; início da reconciliação.\n", item->id);
+    if (pause_ms(w, RECONCILE_INITIAL_MS) != 0) return;
+    while (!atomic_load(&w->stop) && !atomic_load(&w->failed)) {
+        int found = 0;
+        char stored[INTERSCITY_CLIENT_TIMESTAMP_CAPACITY];
+        InterscityClientError query_error = INTERSCITY_CLIENT_OK;
+        if (interscity_client_last_timestamp(w->client, item->uuid, stored, sizeof stored,
+                                             &found, &query_error) != 0) {
+            absence_seen = 0;
+            fprintf(stderr, "Worker HTTP: id=%" PRId64 " reconciliação indisponível: %s (código %d); "
+                    "preservado inflight; nova consulta em %u ms.\n", item->id,
+                    interscity_client_error_string(query_error), (int)query_error, *delay_ms);
+            if (pause_ms(w, *delay_ms) != 0) return;
+            *delay_ms = next_delay(*delay_ms);
+            continue;
+        }
+        TelemetryQueueError error;
+        int comparison = found ? strcmp(stored, item->timestamp) : -1;
+        if (found && comparison == 0) {
+            if (telemetry_queue_confirm(queue, item->id, &error) != TELEMETRY_QUEUE_OK) {
+                fatal(w, "ao confirmar SQLite após consulta", &error);
+            } else {
+                w->recovered++;
+                *delay_ms = 1000;
+                if (printf("Worker HTTP: id=%" PRId64 " recuperada pelo Data Collector "
+                           "(timestamp igual; SQLite confirmado); retomando fila.\n", item->id) < 0 ||
+                    fflush(stdout) != 0) atomic_store(&w->failed, true);
+            }
+            return;
+        }
+        if (atomic_load(&w->stop)) return; /* Do not authorize a new send on stop. */
+        if (comparison < 0 && !absence_seen) {
+            absence_seen = 1;
+            fprintf(stderr, "Worker HTTP: id=%" PRId64 " amostra ausente ou anterior; "
+                    "aguardando %u ms de consistência antes da segunda consulta.\n",
+                    item->id, CONSISTENCY_WINDOW_MS);
+            if (pause_ms(w, CONSISTENCY_WINDOW_MS) != 0) return;
+            continue;
+        }
+        const char *reason = comparison > 0 ?
+            "Data Collector posterior: amostra atual não comprovada; risco de duplicação" :
+            "Data Collector sem amostra atual em duas consultas; reenvio autorizado";
+        if (telemetry_queue_retry(queue, item->id, reason, &error) != TELEMETRY_QUEUE_OK) {
+            fatal(w, "ao autorizar nova tentativa SQLite", &error);
+        } else {
+            w->retried++;
+            fprintf(stderr, "Worker HTTP: id=%" PRId64 " nova tentativa autorizada: %s; "
+                    "pending; retomando fila.\n", item->id, reason);
+        }
+        return;
+    }
+}
+
 static void *run(void *context)
 {
     DeliveryWorker *w = context;
@@ -76,10 +145,9 @@ static void *run(void *context)
             break;
         }
         if (item.status == TELEMETRY_QUEUE_INFLIGHT) {
-            fprintf(stderr, "Worker HTTP: id=%" PRId64 " inflight; aguarda reconciliação; envios suspensos.\n", item.id);
-            w->suspended++;
+            reconcile(w, queue, &item, &delay_ms);
             telemetry_queue_item_clear(&item);
-            break;
+            continue;
         }
         if (atomic_load(&w->stop)) {
             telemetry_queue_item_clear(&item);
@@ -88,6 +156,10 @@ static void *run(void *context)
         if (telemetry_queue_start_attempt(queue, item.id, &error) != TELEMETRY_QUEUE_OK) {
             fatal(w, "ao iniciar tentativa SQLite", &error);
             telemetry_queue_item_clear(&item);
+            break;
+        }
+        if (atomic_load(&w->stop)) {
+            telemetry_queue_item_clear(&item); /* Keep inflight for next startup. */
             break;
         }
         /* No SQLite transaction survives start_attempt. Finish this attempt's
@@ -107,9 +179,8 @@ static void *run(void *context)
                            item.id, item.machine_id) < 0 || fflush(stdout) != 0) atomic_store(&w->failed, true);
             }
         } else if (interscity_client_is_ambiguous(http_error)) {
-            fprintf(stderr, "Worker HTTP: id=%" PRId64 " resultado ambíguo (%s); inflight aguarda reconciliação; envios suspensos.\n",
+            fprintf(stderr, "Worker HTTP: id=%" PRId64 " resultado ambíguo (%s); preservado inflight; reconciliação automática após janela inicial.\n",
                     item.id, interscity_client_error_string(http_error));
-            w->suspended++;
         } else if (http_error == INTERSCITY_CLIENT_HTTP_STATUS) {
             char reason[96];
             int length = snprintf(reason, sizeof reason, "HTTP %ld", response.http_status);
@@ -136,10 +207,10 @@ static void *run(void *context)
             atomic_store(&w->failed, true);
         }
         telemetry_queue_item_clear(&item);
-        if (w->suspended || atomic_load(&w->failed)) break;
+        if (atomic_load(&w->failed)) break;
         if (transient) {
             if (pause_ms(w, delay_ms) != 0) break;
-            delay_ms = delay_ms >= 16000 ? 30000 : delay_ms * 2;
+            delay_ms = next_delay(delay_ms);
         }
     }
     if (telemetry_queue_close(&queue, &error) != TELEMETRY_QUEUE_OK) fatal(w, "ao fechar SQLite", &error);
@@ -212,8 +283,8 @@ int delivery_worker_stop(DeliveryWorker **worker)
         return -1;
     }
     int result = delivery_worker_failed(w) ? -1 : 0;
-    if (printf("Worker HTTP: %lu entregues, %lu retentativas, %lu bloqueadas, %lu aguardando reconciliação.\n",
-               w->delivered, w->retried, w->blocked, w->suspended) < 0 || fflush(stdout) != 0) result = -1;
+    if (printf("Worker HTTP: %lu entregues, %lu retentativas, %lu bloqueadas, %lu recuperadas pelo Data Collector.\n",
+               w->delivered, w->retried, w->blocked, w->recovered) < 0 || fflush(stdout) != 0) result = -1;
     interscity_client_destroy(&w->client);
     free(w->path);
     free(w);

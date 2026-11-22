@@ -117,6 +117,34 @@ static void test_mock_server(const char *base_url)
     interscity_client_destroy(&client);
 }
 
+static void test_last_timestamp(const char *base_url)
+{
+    InterscityClient *client = NULL;
+    assert(interscity_client_create(&client, base_url, 1500, NULL) == 0);
+    const char *validity = require_env("SIM_INTERSCITY_LAST_VALID");
+    for (size_t i = 0; validity[i] != '\0'; ++i) {
+        assert(validity[i] == '0' || validity[i] == '1');
+        char timestamp[INTERSCITY_CLIENT_TIMESTAMP_CAPACITY] = "unchanged";
+        char before[sizeof timestamp];
+        memcpy(before, timestamp, sizeof before);
+        int found = -1;
+        InterscityClientError error = INTERSCITY_CLIENT_OK;
+        int result = interscity_client_last_timestamp(client, UUID_201, timestamp,
+                                                       sizeof timestamp, &found, &error);
+        if (validity[i] == '1') {
+            assert(result == 0 && error == INTERSCITY_CLIENT_OK && found == 1);
+            assert(strcmp(timestamp, "2024-01-01T00:00:00") == 0);
+        } else {
+            if (result != -1 || error != INTERSCITY_CLIENT_RESPONSE) {
+                fprintf(stderr, "Consulta inválida %zu: result=%d error=%d found=%d\n", i, result, error, found);
+            }
+            assert(result == -1 && error == INTERSCITY_CLIENT_RESPONSE && found == 0);
+            assert(memcmp(timestamp, before, sizeof timestamp) == 0);
+        }
+    }
+    interscity_client_destroy(&client);
+}
+
 static void test_closed_port(const char *closed_url)
 {
     InterscityClient *client = NULL;
@@ -141,6 +169,7 @@ int main(void)
     const char *closed_url = require_env("SIM_INTERSCITY_CLOSED_URL");
     test_arguments();
     test_mock_server(base_url);
+    test_last_timestamp(base_url);
     test_closed_port(closed_url);
     test_error_strings();
     puts("test_interscity_client: todos os testes C passaram.");

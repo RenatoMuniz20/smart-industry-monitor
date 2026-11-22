@@ -11,7 +11,7 @@ typedef struct DeliveryWorker DeliveryWorker;
  */
 int delivery_worker_start(DeliveryWorker **out, const char *db_path,
                           const char *url, long timeout_ms);
-/* Atomic query, NULL-safe. A suspended worker (ambiguous inflight) is NOT fatal.
+/* Atomic query, NULL-safe. Unavailable reconciliation (inflight) is NOT fatal; it retries with backoff.
  * No other worker data is exposed concurrently to main.
  */
 int delivery_worker_failed(const DeliveryWorker *worker);

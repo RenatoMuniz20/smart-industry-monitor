@@ -205,9 +205,56 @@ int interscity_client_is_ambiguous(InterscityClientError error)
     return error == INTERSCITY_CLIENT_TIMEOUT || error == INTERSCITY_CLIENT_NETWORK;
 }
 
+/* A malformed consultation must not become evidence that a sample is absent.
+ * Use the collected length, rejecting raw NUL and trailing non-JSON content. */
+static json_object *response_object(const char *text, size_t length)
+{
+    if (text == NULL || length == 0 || memchr(text, '\0', length) != NULL) return NULL;
+    struct json_tokener *tokener = json_tokener_new();
+    if (tokener == NULL) return NULL;
+    json_tokener_set_flags(tokener, JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8);
+    json_object *root = json_tokener_parse_ex(tokener, text, (int)length + 1);
+    int valid = json_tokener_get_error(tokener) == json_tokener_success;
+    size_t end = json_tokener_get_parse_end(tokener);
+    while (end < length && (text[end] == ' ' || text[end] == '\t' ||
+                           text[end] == '\r' || text[end] == '\n')) ++end;
+    valid = valid && end >= length && root != NULL && json_object_is_type(root, json_type_object);
+    json_tokener_free(tokener);
+    if (!valid) { json_object_put(root); return NULL; }
+    return root;
+}
+
+/* Accept complete UTC dates only: YYYY-MM-DDTHH:MM:SS[.digits]Z.
+ * Validate before trimming to seconds; offsets are not compared unnormalized. */
+static int valid_collected_date(json_object *date)
+{
+    if (!json_object_is_type(date, json_type_string)) return 0;
+    const char *s = json_object_get_string(date);
+    int length = json_object_get_string_len(date);
+    if (length < 20 || memchr(s, '\0', (size_t)length) != NULL || s[length - 1] != 'Z') return 0;
+    if (length != 20) {
+        if (length < 22 || s[19] != '.') return 0;
+        for (int i = 20; i < length - 1; ++i) {
+            if (s[i] < '0' || s[i] > '9') return 0;
+        }
+    }
+    for (int i = 0; i < 19; ++i) {
+        if (i == 4 || i == 7) { if (s[i] != '-') return 0; }
+        else if (i == 10) { if (s[i] != 'T') return 0; }
+        else if (i == 13 || i == 16) { if (s[i] != ':') return 0; }
+        else if (s[i] < '0' || s[i] > '9') return 0;
+    }
+    int month = (s[5] - '0') * 10 + s[6] - '0';
+    int day = (s[8] - '0') * 10 + s[9] - '0';
+    return month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+           (s[11] - '0') * 10 + s[12] - '0' <= 23 &&
+           (s[14] - '0') * 10 + s[15] - '0' <= 59 &&
+           (s[17] - '0') * 10 + s[18] - '0' <= 59;
+}
+
 /* Reads resources[0].capabilities.<each capability>[0].date and keeps the most
  * recent one as its first 19 characters. "found" stays 0 when no series has data. */
-static InterscityClientError parse_last(const char *text, char *out, int *found)
+static InterscityClientError parse_last(const char *text, size_t length, const char *uuid, char *out, int *found)
 {
     static const char *capabilities[] = {"sim_operating_state", "sim_motor_temperature",
                                          "sim_current", "sim_failure_within_24h"};
@@ -218,7 +265,7 @@ static InterscityClientError parse_last(const char *text, char *out, int *found)
     json_object *caps = NULL;
 
     if (text == NULL) return INTERSCITY_CLIENT_RESPONSE;
-    json_object *root = json_tokener_parse(text);
+    json_object *root = response_object(text, length);
     if (root == NULL) return INTERSCITY_CLIENT_RESPONSE;
     if (!json_object_object_get_ex(root, "resources", &resources) || resources == NULL ||
         !json_object_is_type(resources, json_type_array)) {
@@ -230,7 +277,13 @@ static InterscityClientError parse_last(const char *text, char *out, int *found)
         return INTERSCITY_CLIENT_OK; /* nothing stored */
     }
     resource = json_object_array_get_idx(resources, 0);
-    if (resource == NULL || !json_object_object_get_ex(resource, "capabilities", &caps) ||
+    json_object *identifier = NULL;
+    if (resource == NULL || !json_object_is_type(resource, json_type_object) ||
+        !json_object_object_get_ex(resource, "id", &identifier) ||
+        !json_object_is_type(identifier, json_type_string) ||
+        json_object_get_string_len(identifier) != 36 ||
+        memcmp(json_object_get_string(identifier), uuid, 36) != 0 ||
+        !json_object_object_get_ex(resource, "capabilities", &caps) ||
         caps == NULL || !json_object_is_type(caps, json_type_object)) {
         json_object_put(root);
         return INTERSCITY_CLIENT_RESPONSE;
@@ -239,15 +292,19 @@ static InterscityClientError parse_last(const char *text, char *out, int *found)
         json_object *series = NULL;
         json_object *sample = NULL;
         json_object *date = NULL;
-        if (!json_object_object_get_ex(caps, capabilities[i], &series) || series == NULL ||
-            !json_object_is_type(series, json_type_array) ||
-            json_object_array_length(series) == 0) {
-            continue;
+        if (!json_object_object_get_ex(caps, capabilities[i], &series)) continue;
+        if (series == NULL || !json_object_is_type(series, json_type_array)) {
+            json_object_put(root);
+            return INTERSCITY_CLIENT_RESPONSE;
         }
+        if (json_object_array_length(series) == 0) continue;
         sample = json_object_array_get_idx(series, 0);
-        if (sample == NULL || !json_object_object_get_ex(sample, "date", &date) || date == NULL) continue;
+        if (sample == NULL || !json_object_is_type(sample, json_type_object) ||
+            !json_object_object_get_ex(sample, "date", &date) || !valid_collected_date(date)) {
+            json_object_put(root);
+            return INTERSCITY_CLIENT_RESPONSE;
+        }
         const char *text_date = json_object_get_string(date);
-        if (text_date == NULL || strlen(text_date) < 19) continue;
         if (!any || strncmp(text_date, best, 19) > 0) {
             memcpy(best, text_date, 19);
             best[19] = '\0';
@@ -286,10 +343,16 @@ int interscity_client_last_timestamp(InterscityClient *client, const char *uuid,
                                                  collect_body, &collected, &observed);
     if (outcome == INTERSCITY_CLIENT_OK) {
         if (observed.http_status == 200) {
-            outcome = parse_last(collected.data, out, found);
-        } else if (observed.http_status == 404 && collected.data != NULL &&
-                   strstr(collected.data, "Resource not found") != NULL) {
-            outcome = INTERSCITY_CLIENT_OK; /* machine without data: found stays 0 */
+            outcome = parse_last(collected.data, collected.length, uuid, out, found);
+        } else if (observed.http_status == 404) {
+            json_object *root = response_object(collected.data, collected.length);
+            json_object *message = NULL;
+            int missing = root != NULL && json_object_object_get_ex(root, "error", &message) &&
+                json_object_is_type(message, json_type_string) &&
+                json_object_get_string_len(message) == (int)strlen("Resource not found") &&
+                strcmp(json_object_get_string(message), "Resource not found") == 0;
+            json_object_put(root);
+            outcome = missing ? INTERSCITY_CLIENT_OK : INTERSCITY_CLIENT_HTTP_STATUS;
         } else {
             outcome = INTERSCITY_CLIENT_HTTP_STATUS;
         }

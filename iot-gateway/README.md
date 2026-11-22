@@ -468,8 +468,8 @@ operação separada da consulta; um segundo chamador que perdeu a disputa recebe
 erro. Nenhuma chamada de rede pode ocorrer dentro dessas transações curtas.
 
 Registros `inflight` sobrevivem ao fechamento/reabertura **sem retornar a
-pending**. Eles representam envio potencialmente ambíguo e terão reconciliação
-na SIM-09.4. Bloqueados continuam persistidos e contados, mas não são retornados
+pending**. Eles representam envio potencialmente ambíguo e são reconciliados
+pelo worker na SIM-09.4, sem reset do contador de tentativas. Bloqueados continuam persistidos e contados, mas não são retornados
 por `peek`; esta etapa não fornece desbloqueio automático. Não há retries HTTP,
 expiração, limpeza automática, migração de esquema existente incompatível ou
 limite de tamanho da fila além dos limites normais do SQLite/disco.
@@ -541,7 +541,8 @@ continua disponível, mas não é usada para tentar contornar uma falha SQLite.
 
 O resumo `Fila SQLite` informa persistências desta execução: persistidas,
 duplicatas ignoradas, sem mapeamento e não preparadas. Um resumo separado
-`Worker HTTP` informa entregas, retentativas, bloqueios e suspensão. Nenhum
+`Worker HTTP` informa entregas HTTP 201, retentativas, bloqueios e recuperações
+pelo Data Collector separadamente. Nenhum
 deles representa a quantidade total já existente no banco. Novos registros
 entram como `pending`, com `attempt_count=0`, antes de serem reclamados pelo worker.
 
@@ -558,9 +559,9 @@ legados; sem URL/mapa, permanece o modo de validação e logging.
 
 `tests/test_durable_queue.py` integra `make test` para CLI/inicialização e
 `make test-mqtt` para recepção real, SQLite temporário e InterSCity falso que
-registra requisições. Uma fixture anterior `inflight` suspende o worker para
-isolar os testes de recepção: três registros pending com campos/corpo conferidos,
-duplicatas, reinicialização, HTTP indisponível e ausência de POST durante suspensão, JSON
+registra requisições. Uma fixture anterior `inflight` com Collector indisponível mantém a fila
+aguardando reconciliação para isolar os testes de recepção: três registros pending com campos/corpo conferidos,
+duplicatas, reinicialização, HTTP indisponível e ausência de POST ao Adaptor durante falha de consulta, JSON
 inválido, ID sem mapa, erro de payload, cursor confirmado e erro SQLite fatal
 injetado por trigger. Verifica fechamento por sinais e ausência de WAL/SHM
 residuais. Os testes existentes da SIM-08 não foram modificados.
@@ -587,18 +588,18 @@ aberta durante HTTP. O resultado determina a transição:
 | HTTP 201 | `confirm`: cursor monotônico e remoção em transação única; só depois registra entrega |
 | HTTP 429 ou 5xx | `retry`: volta a pending com last_error; espera 1, 2, 4, 8, 16, 30 segundos (teto) |
 | Outro status HTTP | `block`: preserva registro e motivo; continua os próximos elegíveis |
-| Timeout/erro de rede | Preserva inflight, registra ambiguidade e suspende todos os envios posteriores |
-| Inflight existente | Registra uma vez e suspende os envios; MQTT continua gravando |
+| Timeout/erro de rede | Preserva inflight e inicia reconciliação automática (SIM-09.4) |
+| Inflight existente | Reconcilia antes de enviar registros posteriores; MQTT continua gravando |
 | Erro local/SQLite | Falha fatal comunicada por flag atômica; processo termina com código 1 |
 
 O contador de retentativas conta retornos a `pending` para nova tentativa;
 pode incluir uma espera interrompida antes do próximo POST.
 Após entrega confirmada o backoff reinicia em 1 segundo. Fila vazia é consultada
 a cada 250 ms; esperas observam parada em fatias de até 50 ms, sem busy waiting.
-A suspensão termina a rotina de envio nesta etapa; não há consulta ao Data
-Collector nem reenvio de resultado ambíguo. O estado inflight permanece no banco
-mesmo após reiniciar. O diagnóstico da ambiguidade fica no log; a API existente
-não altera last_error enquanto mantém inflight. Recuperação pertence à SIM-09.4.
+A SIM-09.4 substitui a suspensão permanente da SIM-09.3 pela reconciliação
+automática descrita abaixo. O estado inflight permanece no banco até uma decisão
+confirmada; falhas temporárias não encerram a rotina. Diagnósticos de consultas
+ficam no log; a API existente não altera last_error enquanto mantém inflight.
 Apenas um Gateway/worker deve consumir o arquivo: não há protocolo para múltiplos
 consumidores. A URL é global da execução; ao reiniciar, deve apontar ao mesmo
 InterSCity dos UUIDs persistidos.
@@ -619,7 +620,7 @@ Exemplos de logs (formatos; resultados de testes são emitidos pela suíte):
 Worker HTTP: id=1 machine_id=1 entregue (HTTP 201; SQLite confirmado).
 Worker HTTP: id=2 HTTP 503; pending; nova tentativa em 1000 ms.
 Worker HTTP: id=3 blocked (HTTP 400).
-Worker HTTP: id=4 inflight; aguarda reconciliação; envios suspensos.
+Worker HTTP: id=4 inflight; início da reconciliação.
 ```
 
 `make -C iot-gateway test-mqtt` inclui `tests/test_delivery_worker.py`, com
@@ -631,10 +632,100 @@ SIGTERM durante sucesso/timeout/backoff e trigger que impede confirmação após
 controladas por eventos; todos os processos têm timeout e limpeza em finally.
 Não utiliza o InterSCity real. Os testes de recepção da SIM-09.2 mantêm cobertura
 de validação, payload, persistência, duplicatas e erro SQLite fatal; ausência de
-POST agora é exigida somente quando há uma pendência inflight deliberada.
+POST ao Adaptor é exigida enquanto a consulta da pendência inflight falha.
 
 Sem `--queue-db`, não se cria worker ou conexão SQLite; o fluxo direto da SIM-08,
 seus logs e a consulta ao Data Collector permanecem inalterados. QoS 1 ainda
-admite duplicações e seu ACK não é atômico com persistência. Não há deduplicação
-de envios ambíguos, reconciliação, múltiplos workers ou garantia de persistência
-no Data Collector decorrente apenas do HTTP 201.
+admite duplicações e seu ACK não é atômico com persistência. Não há garantia exactly-once, múltiplos workers ou garantia de persistência
+no Data Collector decorrente apenas do HTTP 201. A reconciliação atual utiliza
+a identidade aproximada do timestamp e pode produzir duplicatas.
+
+
+## Reconciliação e recuperação automática — SIM-09.4
+
+Procedimento e evidências: [SIM-09 — Fila durável](../docs/sim-09-fila-duravel.md).
+
+Fluxo: **MQTT → validação/payload → SQLite → worker HTTP → InterSCity**. A thread
+MQTT persiste usando sua conexão; o único worker usa outra conexão SQLite e seu
+cliente libcurl exclusivo tanto para POST ao Adaptor quanto para
+`POST /collector/resources/data/last`. Não há transações abertas nas consultas,
+requisições ou esperas. Nenhuma opção nova de CLI ou alteração de esquema.
+
+O worker não encerra por indisponibilidade HTTP: a cabeça FIFO permanece inflight
+e impede envios posteriores até resolver a ambiguidade. MQTT continua gravando.
+Quando a consulta voltar a funcionar, a recuperação prossegue automaticamente,
+sem reiniciar o Gateway. Registros inflight encontrados ao reiniciar seguem a
+mesma política, mantendo attempt_count; blocked não são apagados nem reenviados.
+
+As constantes `RECONCILE_INITIAL_MS=2000` e `CONSISTENCY_WINDOW_MS=2000` estão no
+worker: espera inicial de 2 s antes da primeira consulta de cada reconciliação,
+inclusive após reinício, e mais 2 s entre evidências de ausência. As decisões são:
+
+| Resultado da consulta | Decisão |
+| --- | --- |
+| Timestamp exatamente igual | `confirm` atômico; conta recuperação pelo Data Collector, sem novo POST |
+| `found=0` | Espera 2 s e consulta novamente; duas ausências consecutivas autorizam `retry` |
+| Timestamp anterior | Mesma política de duas consultas da ausência |
+| Timestamp posterior | Não confirma nem remove; `retry` autoriza reenvio com aviso de risco de duplicação |
+| Timeout/rede/HTTP inesperado/resposta inválida | Mantém inflight, não reenvia; consulta novamente com backoff |
+
+Falha entre duas respostas de ausência reinicia a evidência: não se presume
+que uma consulta malsucedida confirma ausência. O backoff é compartilhado com
+as recusas transitórias de POST: 1, 2, 4, 8, 16, 30 s, com teto de 30 s; uma
+entrega HTTP 201 ou recuperação confirmada o reinicia em 1 s. Um reenvio sempre
+passa por `inflight → pending → start_attempt → inflight`, incrementando
+attempt_count. Falhas SQLite, inclusive confirmar após consulta bem-sucedida,
+continuam fatais e não contam entrega/recuperação.
+
+O cliente existente foi ajustado pontualmente para não converter respostas
+incompatíveis em ausência: verifica objeto completo com comprimento explícito,
+NUL bruto/conteúdo adicional, tipos das séries e datas conhecidas. HTTP 404 só
+significa ausência com objeto JSON cujo `error` é `Resource not found`. Respostas
+válidas da SIM-08 permanecem aceitas. O recurso retornado deve ter `id` textual
+igual ao UUID solicitado. Datas aceitas são exclusivamente UTC completas:
+`YYYY-MM-DDTHH:MM:SSZ` ou `YYYY-MM-DDTHH:MM:SS.dígitosZ`, com ao menos um dígito
+na fração. Sufixos arbitrários, ausência de `Z` e offsets são rejeitados; não há
+comparação por prefixo entre fusos diferentes. Somente depois da validação a
+data é reduzida aos 19 caracteres usados na comparação. UUID incompatível ou
+data inválida resulta em `INTERSCITY_CLIENT_RESPONSE`, sem confirmação, cursor
+ou reenvio autorizado; uma consulta válida posterior permite recuperação.
+O fluxo legado, sem `--queue-db`, permanece
+com sua política anterior (inclusive comparação `>=` na deduplicação em memória).
+
+`/last` informa apenas a amostra mais recente de capabilities conhecidas; não é
+uma consulta de presença exata. Timestamp igual é **identidade aproximada** e não
+prova todo o conteúdo das capabilities. Timestamp posterior não prova a presença
+da amostra atual. Uma amostra pode já ter sido aceita e ainda não aparecer por
+consistência eventual; mesmo duas consultas não eliminam essa possibilidade.
+O reenvio prioriza entrega e **pode duplicar dados**. Não há exactly-once nem
+idempotency keys. O cursor continua ignorando novas entradas com timestamp menor
+ou igual ao último confirmado; não resolve amostras fora de ordem. PUBACK MQTT
+e COMMIT SQLite continuam não atômicos: dados não persistidos podem ser perdidos.
+
+SIGTERM interrompe esperas; após observar parada não inicia novo POST. Uma
+consulta/POST ativa termina ou atinge o timeout configurado; confirmação válida
+pode ser concluída antes de sair, mas resultados não resolvidos ficam inflight.
+O join continua anterior à destruição do cliente. Os limites práticos de timeout,
+DNS/TCP síncrono, busy timeout SQLite e logs síncronos permanecem.
+
+Para executar os testes de recuperação e regressão com serviços falsos locais:
+
+```sh
+make -C iot-gateway clean
+make -C iot-gateway all
+make -C iot-gateway test
+make -C iot-gateway test-mqtt
+make -C iot-gateway test-e2e
+# Apenas worker/reconciliação (incluído em test-mqtt):
+(cd iot-gateway && python3 -B tests/test_delivery_worker.py)
+```
+
+A suíte separa contagens de POSTs de telemetria e consultas. Cobre timeout com
+amostra armazenada e sem armazenamento; respostas anteriores/posteriores;
+indisponibilidade com MQTT ativo e retomada sem reinício; reabertura inflight;
+Collector 503; respostas malformadas/incompatíveis; SIGTERM durante consulta;
+consistência eventual com falha intermediária; rollback após confirmação por
+consulta. Preserva testes de 201, 429/5xx, blocked, deduplicação, HTTP lento,
+SIGTERM e rollback da SIM-09.3, além das suítes legadas da SIM-08. O teste imprime
+as contagens observadas e o PID mantido no cenário de indisponibilidade; somente
+servidores temporários locais são utilizados.
