@@ -16,7 +16,7 @@ Detalhes e resultados: [docs/sim-06-backend.md](../docs/sim-06-backend.md).
     sudo apt install build-essential libmicrohttpd-dev libcurl4-openssl-dev libjson-c-dev python3
 
 ## Compilar e testar
-    make -C backend test          # 47 verificações locais, sem acessar a UFMA
+    make -C backend test          # 51 verificações locais, sem acessar a UFMA
     make -C backend smoke-real    # manual: consulta a instância real (somente leitura)
 
 ## Executar

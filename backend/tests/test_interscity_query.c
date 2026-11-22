@@ -54,6 +54,11 @@ int main(int argc, char **argv)
           "zero é lido como valor (failure = 0)");
     CHECK(out[1].current.present == 0, "capability ausente fica present = 0");
     CHECK(strcmp(out[1].operating_state.text, "RUNNING") == 0, "segunda máquina: estado RUNNING");
+    CHECK(out[0].vibration_rms.present && out[0].vibration_rms.number > 0.8099
+          && out[0].vibration_rms.number < 0.8101, "sim_vibration_rms numérico 0.81 (SIM-11)");
+    CHECK(out[0].rpm.present && out[0].rpm.number > 860.89 && out[0].rpm.number < 860.91
+          && out[1].vibration_rms.present == 0 && out[1].rpm.present == 0,
+          "sim_rpm numérico 860.9; ausentes na segunda máquina (SIM-11)");
 
     /* 2. HTTP 500 -> erro com código. */
     snprintf(route, sizeof route, "%s/http500", argv[1]);
@@ -95,6 +100,12 @@ int main(int argc, char **argv)
     CHECK(h.operating_state.count == 1 && strcmp(h.operating_state.items[0].text, "IDLE") == 0,
           "estado textual preservado no histórico");
     CHECK(h.current.count == 0, "capability ausente vira série vazia");
+    CHECK(h.vibration_rms.count == 2
+          && strcmp(h.vibration_rms.items[0].date, "2024-01-01T00:24:00.000Z") == 0
+          && h.vibration_rms.items[0].number > 0.8099 && h.vibration_rms.items[0].number < 0.8101,
+          "vibração sem repetição e em ordem (SIM-11)");
+    CHECK(h.rpm.count == 1 && h.rpm.items[0].number > 860.89 && h.rpm.items[0].number < 860.91,
+          "série de rpm no histórico (SIM-11)");
     interscity_history_free(&h);
 
     /* 8. 404 'Resource not found' significa sem dados. */

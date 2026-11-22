@@ -33,6 +33,12 @@ HIST_A = {
                     {"value": 42.01, "date": "2024-01-01T00:43:00.000Z"},
                     {"value": 49.08, "date": "2024-01-01T00:24:00.000Z"},
                 ],
+                "sim_vibration_rms": [
+                    {"value": 0.75, "date": "2024-01-01T00:43:00.000Z"},
+                    {"value": 0.81, "date": "2024-01-01T00:24:00.000Z"},
+                    {"value": 0.75, "date": "2024-01-01T00:43:00.000Z"},
+                ],
+                "sim_rpm": [{"value": 860.9, "date": "2024-01-01T00:24:00.000Z"}],
                 "sim_failure_within_24h": [{"value": 0, "date": "2024-01-01T00:24:00.000Z"}],
             },
         }
@@ -139,6 +145,10 @@ def main():
             {"timestamp": "2024-01-01T00:43:00.000Z", "value": 42.01}], s["motor_temperature"]
         assert s["operating_state"] == [{"timestamp": "2024-01-01T00:24:00.000Z", "value": "IDLE"}]
         assert s["current"] == []
+        assert s["vibration_rms"] == [
+            {"timestamp": "2024-01-01T00:24:00.000Z", "value": 0.81},
+            {"timestamp": "2024-01-01T00:43:00.000Z", "value": 0.75}], s["vibration_rms"]
+        assert s["rpm"] == [{"timestamp": "2024-01-01T00:24:00.000Z", "value": 860.9}]
         assert s["failure_within_24h"] == [{"timestamp": "2024-01-01T00:24:00.000Z", "value": 0}]
         print("PASS: histórico sem duplicatas, em ordem, com texto, número e zero")
 

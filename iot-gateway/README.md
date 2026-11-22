@@ -55,7 +55,8 @@ Tópico: `smart-industry/machines/{machine_id}/telemetry`, com dígitos decimais
 ID positivo representável em `int` e sufixo exato, sem segmentos extras. Zeros
 à esquerda são aceitos numericamente; não há whitelist dos dez IDs.
 
-O objeto JSON deve conter exatamente as oito propriedades distintas abaixo,
+O objeto JSON deve conter exatamente as dez propriedades distintas abaixo (oito até a
+SIM-10; `vibration_rms` e `rpm` entraram na SIM-11),
 sem adicionais, todas obrigatórias e com tipos verificados antes da conversão:
 
 | Propriedade | Regra |
@@ -63,7 +64,7 @@ sem adicionais, todas obrigatórias e com tipos verificados antes da conversão:
 | `machine_id` | Inteiro positivo até `INT_MAX`, igual ao ID do tópico |
 | `machine_type` | String não vazia, até 63 bytes |
 | `timestamp` | String não vazia, até 63 bytes, preservada sem conversão |
-| `temperature`, `current`, `power` | Número inteiro/fracionário finito ou `null` |
+| `temperature`, `current`, `power`, `vibration_rms`, `rpm` | Número inteiro/fracionário finito ou `null` |
 | `state` | String `UNKNOWN`, `IDLE`, `NORMAL` ou `PEAK` |
 | `failure_within_24h` | Inteiro 0 ou 1, sem aceitar booleanos |
 
@@ -106,7 +107,7 @@ com tópico correspondente.
 **Chaves repetidas:** json-c 0.19 não expõe opção pública para rejeitá-las no
 tokener. A biblioteca mantém o último valor, e a validação se aplica ao objeto
 resultante. Esse comportamento foi verificado por teste e é uma limitação
-explícita: oito propriedades distintas não garante oito ocorrências no texto.
+explícita: dez propriedades distintas não garante dez ocorrências no texto.
 Não foi implementado parser manual nem scanner de chaves duplicadas.
 
 O limite de profundidade do tokener é o padrão da biblioteca (32). Não há limite
@@ -249,12 +250,12 @@ Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
 Somente então os produtores devem ser iniciados. O loop usa polling síncrono
 de 250 ms. Cada callback passa tópico, bytes e comprimento ao validador, sem
 presumir NUL. Uma telemetria válida produz uma linha `Telemetria válida: `
-seguida de um objeto JSON com os oito campos, mantendo `null` diferente de
+seguida de um objeto JSON com os dez campos, mantendo `null` diferente de
 zero. Textos são representados com escaping da json-c; não são interpolados
 como texto bruto no terminal. Exemplo observado no teste de integração:
 
 ```text
-Telemetria válida: {"machine_id":1,"machine_type":"CNC","timestamp":"original sample","temperature":0.0,"current":null,"power":null,"state":"PEAK","failure_within_24h":1}
+Telemetria válida: {"machine_id":1,"machine_type":"CNC","timestamp":"original sample","temperature":0.0,"current":null,"power":null,"vibration_rms":null,"rpm":0.0,"state":"PEAK","failure_within_24h":1}
 ```
 
 Para mensagem inválida, stderr recebe o diagnóstico do validador e o tamanho,
@@ -299,7 +300,7 @@ O alvo compila os executáveis necessários e usa o launcher existente com
 `LIMIT=3 INTERVAL_MS=1000`, host loopback e porta dinâmica de um Mosquitto
 temporário. Aguarda a prontidão do Gateway, verifica dez processos simultâneos,
 30 publicações confirmadas e pelo menos três mensagens válidas por ID,
-comparando os oito campos às amostras do CSV e permitindo duplicações QoS 1.
+comparando os dez campos às amostras do CSV e permitindo duplicações QoS 1.
 Também injeta válida/`{}`/válida e encerra por SIGTERM após observar os logs.
 Requer Linux (`/proc`), Bash 5.1+, Python 3, Mosquitto e `mosquitto_pub`, além
 das dependências já descritas. Não altera nem encerra brokers externos.
@@ -346,7 +347,8 @@ Cada telemetria válida continua gerando `Telemetria válida: ...` e, em seguida
 1. O UUID é obtido do mapeamento. Máquina sem UUID não é enviada, pois o Data
    Collector descartaria em silêncio um UUID desconhecido.
 2. `interscity_payload` monta o corpo (medição ausente omite a capability;
-   `power` não é enviado; timestamp `AAAA-MM-DD HH:MM:SS` vira ISO 8601 sem fuso).
+   `power` não é enviado; `vibration_rms` e `rpm` vão para `sim_vibration_rms` e
+   `sim_rpm`; timestamp `AAAA-MM-DD HH:MM:SS` vira ISO 8601 sem fuso).
 3. `interscity_client` faz `POST {url}/adaptor/resources/{uuid}/data`, reutilizando
    a mesma conexão HTTP/TLS entre envios. Somente HTTP 201 é sucesso.
 

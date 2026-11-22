@@ -13,6 +13,8 @@
 #define INTERSCITY_CAP_CURRENT "sim_current"
 #define INTERSCITY_CAP_OPERATING_STATE "sim_operating_state"
 #define INTERSCITY_CAP_FAILURE_WITHIN_24H "sim_failure_within_24h"
+#define INTERSCITY_CAP_VIBRATION_RMS "sim_vibration_rms" /* SIM-11 */
+#define INTERSCITY_CAP_RPM "sim_rpm"                     /* SIM-11 */
 
 /* Recommended buffer size; the largest possible payload is far smaller. */
 #define INTERSCITY_PAYLOAD_CAPACITY 1024
@@ -30,8 +32,8 @@ typedef enum {
 /* Builds the body of POST /adaptor/resources/{uuid}/data for one validated
  * telemetry:
  *   {"data":{"sim_motor_temperature":[{"value":<number>,"timestamp":"..."}],
- *            "sim_current":[...],"sim_operating_state":[...],
- *            "sim_failure_within_24h":[...]}}
+ *            "sim_current":[...],"sim_vibration_rms":[...],"sim_rpm":[...],
+ *            "sim_operating_state":[...],"sim_failure_within_24h":[...]}}
  * Policy:
  *   - A missing measurement (present=false, JSON null) omits its capability;
  *     zero is a measurement and is sent. State and prediction are always sent.

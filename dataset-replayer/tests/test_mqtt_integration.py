@@ -154,8 +154,8 @@ def replayer_cases(root, port):
                         assert topic == f'smart-industry/machines/{machine}/telemetry'
                         data = json.loads(payload)
                         assert set(data) == {'machine_id', 'machine_type', 'timestamp',
-                                            'temperature', 'current', 'power', 'state',
-                                            'failure_within_24h'}
+                                            'temperature', 'current', 'power', 'vibration_rms',
+                                            'rpm', 'state', 'failure_within_24h'}
                         assert data['machine_id'] == machine
                         assert data['power'] is None
                         received.append(data)
@@ -172,6 +172,9 @@ def replayer_cases(root, port):
     assert received[0]['machine_type'] == rows[0]['machine_type']
     assert received[0]['temperature'] == float(rows[0]['temperature_motor'])
     assert received[0]['current'] == float(rows[0]['current_phase_avg'])
+    as_number = lambda text: None if text == '' else float(text)
+    assert received[0]['vibration_rms'] == as_number(rows[0]['vibration_rms'])
+    assert received[0]['rpm'] == as_number(rows[0]['rpm'])
     assert received[0]['failure_within_24h'] == int(rows[0]['failure_within_24h'])
     assert received[0]['state'] == rows[0]['operating_mode'].upper()
     received = receive(dataset, 6, 3, 3)
@@ -185,11 +188,12 @@ def replayer_cases(root, port):
             writer.writerows(selected)
 
     other = dict(rows[0], machine_id='7', failure_within_24h='2')
-    missing = dict(rows[1], temperature_motor='', current_phase_avg='')
+    missing = dict(rows[1], temperature_motor='', current_phase_avg='', vibration_rms='', rpm='')
     invalid = dict(rows[2], failure_within_24h='2')
     write_rows([other, rows[0], missing, invalid])
     received = receive(fixture, 6, 2, 2)
     assert received[1]['temperature'] is None and received[1]['current'] is None
+    assert received[1]['vibration_rms'] is None and received[1]['rpm'] is None
     # A selected invalid row aborts after two confirmations, without success output.
     result = run_replayer(fixture, port, success=False)
     assert 'Erro ao normalizar' in result.stderr

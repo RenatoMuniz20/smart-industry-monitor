@@ -114,8 +114,9 @@ def integration_tests():
                         if mode == 'sigint-messages':
                             first = {'machine_id': 1, 'machine_type': 'CNC\n\x1b[31m"\\',
                                      'timestamp': '2024-01-01 00:00:00', 'temperature': 49.51,
-                                     'current': 5.1, 'power': None, 'state': 'IDLE', 'failure_within_24h': 0}
-                            second = dict(first, machine_type='CNC', temperature=0,
+                                     'current': 5.1, 'power': None, 'vibration_rms': 0.81, 'rpm': 860.9,
+                                     'state': 'IDLE', 'failure_within_24h': 0}
+                            second = dict(first, machine_type='CNC', temperature=0, vibration_rms=None, rpm=0,
                                           current=None, timestamp='original sample', state='PEAK', failure_within_24h=1)
                             publish(port, json.dumps(first).encode())
                             publish(port, b'invalid JSON\n\x1b[31m')
@@ -144,8 +145,8 @@ def integration_tests():
                                 wait_for(process, lambda: RECONNECTED in output.read_text(), diagnostic)
                                 after = {'machine_id': 1, 'machine_type': 'CNC',
                                          'timestamp': '2024-01-01 00:05:00', 'temperature': 50.0,
-                                         'current': 5.0, 'power': None, 'state': 'NORMAL',
-                                         'failure_within_24h': 0}
+                                         'current': 5.0, 'power': None, 'vibration_rms': 0.75,
+                                         'rpm': 899.6, 'state': 'NORMAL', 'failure_within_24h': 0}
                                 publish(port, json.dumps(after).encode())
                                 wait_for(process, lambda: any(line.startswith(PREFIX) for line in
                                          output.read_text().splitlines()), diagnostic)

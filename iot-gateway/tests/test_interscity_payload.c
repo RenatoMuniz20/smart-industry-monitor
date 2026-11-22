@@ -140,6 +140,57 @@ static void test_zero_is_a_measurement_and_power_is_ignored(void)
     assert(strstr(out, "\"value\":\"PEAK\"") != NULL);
 }
 
+/* SIM-11: vibration and rpm become two more capabilities when present. */
+static void test_vibration_and_rpm(void)
+{
+    char out[INTERSCITY_PAYLOAD_CAPACITY];
+    GatewayTelemetry t = sample();
+    t.vibration_rms = 0.81;
+    t.vibration_rms_present = true;
+    t.rpm = 860.9;
+    t.rpm_present = true;
+    build_ok(&t, out, sizeof out);
+    const char *expected =
+        "{\"data\":{"
+        "\"sim_motor_temperature\":[{\"value\":49.51,\"timestamp\":\"2024-01-01T00:00:00\"}],"
+        "\"sim_current\":[{\"value\":5.1,\"timestamp\":\"2024-01-01T00:00:00\"}],"
+        "\"sim_vibration_rms\":[{\"value\":0.81,\"timestamp\":\"2024-01-01T00:00:00\"}],"
+        "\"sim_rpm\":[{\"value\":860.9,\"timestamp\":\"2024-01-01T00:00:00\"}],"
+        "\"sim_operating_state\":[{\"value\":\"IDLE\",\"timestamp\":\"2024-01-01T00:00:00\"}],"
+        "\"sim_failure_within_24h\":[{\"value\":0,\"timestamp\":\"2024-01-01T00:00:00\"}]}}";
+    if (strcmp(out, expected) != 0) {
+        fprintf(stderr, "obtido:   %s\nesperado: %s\n", out, expected);
+        assert(0);
+    }
+    struct json_object *root = json_tokener_parse(out);
+    assert(root != NULL && capability_count(root) == 6);
+    struct json_object *value;
+    assert(json_object_object_get_ex(sample_of(root, INTERSCITY_CAP_VIBRATION_RMS), "value", &value));
+    assert(json_object_get_type(value) == json_type_double && json_object_get_double(value) == 0.81);
+    assert(json_object_object_get_ex(sample_of(root, INTERSCITY_CAP_RPM), "value", &value));
+    assert(json_object_get_type(value) == json_type_double && json_object_get_double(value) == 860.9);
+    json_object_put(root);
+
+    /* Zero is a measurement; an absent field omits only its own capability. */
+    t.vibration_rms = 0.0;
+    t.rpm_present = false;
+    build_ok(&t, out, sizeof out);
+    assert(strstr(out, "\"sim_vibration_rms\":[{\"value\":0.0,") != NULL);
+    root = json_tokener_parse(out);
+    assert(capability_count(root) == 5 && sample_of(root, INTERSCITY_CAP_RPM) == NULL);
+    json_object_put(root);
+
+    /* A present non-finite value is rejected, as for temperature and current. */
+    t = sample();
+    t.vibration_rms = NAN;
+    t.vibration_rms_present = true;
+    expect_error(&t, INTERSCITY_PAYLOAD_CAPACITY, INTERSCITY_PAYLOAD_VALUE);
+    t = sample();
+    t.rpm = INFINITY;
+    t.rpm_present = true;
+    expect_error(&t, INTERSCITY_PAYLOAD_CAPACITY, INTERSCITY_PAYLOAD_VALUE);
+}
+
 static void test_number_round_trip(void)
 {
     const double values[] = {0.1, 1.0 / 3.0, 50.0, -12.5, 123456.789, 1e-7, 1e20, -0.0, DBL_MAX, DBL_MIN};
@@ -256,6 +307,7 @@ int main(void)
     test_reference_sample();
     test_missing_measurements();
     test_zero_is_a_measurement_and_power_is_ignored();
+    test_vibration_and_rpm();
     test_number_round_trip();
     test_timestamps();
     test_invalid_values();

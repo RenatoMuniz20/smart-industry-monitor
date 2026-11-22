@@ -28,6 +28,8 @@ def expected_samples():
                 'temperature': float(row['temperature_motor']) if row['temperature_motor'] else None,
                 'current': float(row['current_phase_avg']) if row['current_phase_avg'] else None,
                 'power': None,
+                'vibration_rms': float(row['vibration_rms']) if row['vibration_rms'] else None,
+                'rpm': float(row['rpm']) if row['rpm'] else None,
                 'state': {'idle': 'IDLE', 'normal': 'NORMAL', 'peak': 'PEAK'}.get(row['operating_mode'], 'UNKNOWN'),
                 'failure_within_24h': int(row['failure_within_24h'])})
     for machine, rows in expected.items():
@@ -96,7 +98,7 @@ def main():
                         assert row in expected[row['machine_id']], diagnostic()
                         assert type(row['failure_within_24h']) is int, diagnostic()
                         assert row['power'] is None, diagnostic()
-                        for key in ('temperature', 'current'):
+                        for key in ('temperature', 'current', 'vibration_rms', 'rpm'):
                             assert row[key] is None or type(row[key]) in (int, float), diagnostic()
 
                     # Isolated control samples distinguish probes from the 30 CSV samples.
@@ -110,7 +112,7 @@ def main():
                     publish(port, json.dumps(after).encode())
                     wait_for(gateway, lambda: after in records(gateway_out), diagnostic)
                     errors = gateway_err.read_text().splitlines()
-                    assert errors and all('oito propriedades obrigatórias' in line for line in errors), diagnostic()
+                    assert errors and all('dez propriedades obrigatórias' in line for line in errors), diagnostic()
                     gateway.send_signal(signal.SIGTERM)
                     assert gateway.wait(timeout=10) == 0, diagnostic()
                     assert gateway_out.read_text().splitlines()[-1] == 'Gateway encerrado por solicitação.', diagnostic()

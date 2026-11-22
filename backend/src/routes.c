@@ -216,10 +216,15 @@ static void build_machines(Writer *w, const RouteContext *ctx,
             w_char(w, ',');
             w_sample(w, "current", &r->current, 0);
             w_char(w, ',');
+            w_sample(w, "vibration_rms", &r->vibration_rms, 0);
+            w_char(w, ',');
+            w_sample(w, "rpm", &r->rpm, 0);
+            w_char(w, ',');
             w_sample(w, "failure_within_24h", &r->failure_within_24h, 0);
         } else {
             w_raw(w, "\"operating_state\":null,\"motor_temperature\":null,"
-                     "\"current\":null,\"failure_within_24h\":null");
+                     "\"current\":null,\"vibration_rms\":null,\"rpm\":null,"
+                     "\"failure_within_24h\":null");
         }
         w_char(w, '}');
     }
@@ -325,6 +330,10 @@ static void handle_history(const RouteContext *ctx, const HttpRequest *req,
     w_series(&w, "motor_temperature", &h.motor_temperature, 0);
     w_char(&w, ',');
     w_series(&w, "current", &h.current, 0);
+    w_char(&w, ',');
+    w_series(&w, "vibration_rms", &h.vibration_rms, 0);
+    w_char(&w, ',');
+    w_series(&w, "rpm", &h.rpm, 0);
     w_char(&w, ',');
     w_series(&w, "failure_within_24h", &h.failure_within_24h, 0);
     w_raw(&w, "}}");

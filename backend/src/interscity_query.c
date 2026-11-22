@@ -198,6 +198,12 @@ static int parse_response(const char *text, IsqMachine *out, size_t out_capacity
         if (json_object_object_get_ex(caps, "sim_current", &arr)) {
             parse_sample(arr, &m->current);
         }
+        if (json_object_object_get_ex(caps, "sim_vibration_rms", &arr)) {
+            parse_sample(arr, &m->vibration_rms);
+        }
+        if (json_object_object_get_ex(caps, "sim_rpm", &arr)) {
+            parse_sample(arr, &m->rpm);
+        }
         if (json_object_object_get_ex(caps, "sim_failure_within_24h", &arr)) {
             parse_sample(arr, &m->failure_within_24h);
         }
@@ -409,6 +415,12 @@ static int parse_history(const char *text, IsqHistory *out, char *error, size_t 
     if (json_object_object_get_ex(caps, "sim_current", &arr)) {
         rc |= parse_series(arr, &out->current, 0);
     }
+    if (json_object_object_get_ex(caps, "sim_vibration_rms", &arr)) {
+        rc |= parse_series(arr, &out->vibration_rms, 0);
+    }
+    if (json_object_object_get_ex(caps, "sim_rpm", &arr)) {
+        rc |= parse_series(arr, &out->rpm, 0);
+    }
     if (json_object_object_get_ex(caps, "sim_failure_within_24h", &arr)) {
         rc |= parse_series(arr, &out->failure_within_24h, 0);
     }
@@ -421,6 +433,8 @@ static int parse_history(const char *text, IsqHistory *out, char *error, size_t 
     series_normalize(&out->operating_state);
     series_normalize(&out->motor_temperature);
     series_normalize(&out->current);
+    series_normalize(&out->vibration_rms);
+    series_normalize(&out->rpm);
     series_normalize(&out->failure_within_24h);
     return 0;
 }
@@ -441,6 +455,8 @@ void interscity_history_free(IsqHistory *history)
     series_free(&history->operating_state);
     series_free(&history->motor_temperature);
     series_free(&history->current);
+    series_free(&history->vibration_rms);
+    series_free(&history->rpm);
     series_free(&history->failure_within_24h);
 }
 

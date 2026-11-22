@@ -10,7 +10,8 @@
 /* Último valor de uma capability, como veio do InterSCity. */
 typedef struct {
     int present;              /* 0 = capability ausente na resposta */
-    double number;            /* sim_motor_temperature, sim_current, sim_failure_within_24h */
+    double number;            /* sim_motor_temperature, sim_current, sim_vibration_rms,
+                                 sim_rpm, sim_failure_within_24h */
     char text[ISQ_TEXT_LEN];  /* sim_operating_state */
     char date[ISQ_DATE_LEN];  /* timestamp exatamente como o InterSCity devolve */
 } IsqSample;
@@ -20,6 +21,8 @@ typedef struct {
     IsqSample operating_state;
     IsqSample motor_temperature;
     IsqSample current;
+    IsqSample vibration_rms;  /* SIM-11 */
+    IsqSample rpm;            /* SIM-11 */
     IsqSample failure_within_24h;
 } IsqMachine;
 
@@ -40,6 +43,8 @@ typedef struct {
     IsqSeries operating_state;
     IsqSeries motor_temperature;
     IsqSeries current;
+    IsqSeries vibration_rms;  /* SIM-11 */
+    IsqSeries rpm;            /* SIM-11 */
     IsqSeries failure_within_24h;
 } IsqHistory;
 

@@ -17,6 +17,8 @@ typedef struct Telemetry {
     double temperature;
     double current;
     double power;
+    double vibration_rms; /* NAN when absent in the CSV; unit not stated by the dataset */
+    double rpm;           /* NAN when absent in the CSV */
     TelemetryState state;
     int failure_within_24h;
 } Telemetry;

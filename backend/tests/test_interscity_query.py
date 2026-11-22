@@ -22,6 +22,8 @@ FIXTURE_OK = {
                 "sim_operating_state": [{"value": "IDLE", "date": "2024-01-01T00:21:00.000Z"}],
                 "sim_motor_temperature": [{"value": 49.51, "date": "2024-01-01T00:21:00.000Z"}],
                 "sim_current": [{"value": 3.2, "date": "2024-01-01T00:21:00.000Z"}],
+                "sim_vibration_rms": [{"value": 0.81, "date": "2024-01-01T00:21:00.000Z"}],
+                "sim_rpm": [{"value": 860.9, "date": "2024-01-01T00:21:00.000Z"}],
                 "sim_failure_within_24h": [{"value": 0, "date": "2024-01-01T00:21:00.000Z"}],
             },
         },
@@ -49,6 +51,12 @@ FIXTURE_HIST = {
                     {"value": 42.01, "date": "2024-01-01T00:43:00.000Z"},
                     {"value": 49.08, "date": "2024-01-01T00:24:00.000Z"},
                 ],
+                "sim_vibration_rms": [
+                    {"value": 0.75, "date": "2024-01-01T00:43:00.000Z"},
+                    {"value": 0.81, "date": "2024-01-01T00:24:00.000Z"},
+                    {"value": 0.75, "date": "2024-01-01T00:43:00.000Z"},
+                ],
+                "sim_rpm": [{"value": 860.9, "date": "2024-01-01T00:24:00.000Z"}],
                 "sim_failure_within_24h": [{"value": 0, "date": "2024-01-01T00:24:00.000Z"}],
             },
         }

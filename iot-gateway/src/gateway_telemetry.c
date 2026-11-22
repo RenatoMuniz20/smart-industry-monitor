@@ -160,13 +160,13 @@ int gateway_telemetry_parse(const char *topic, const void *payload,
 {
     static const char *keys[] = {
         "machine_id", "machine_type", "timestamp", "temperature", "current",
-        "power", "state", "failure_within_24h"
+        "power", "state", "failure_within_24h", "vibration_rms", "rpm"
     };
     GatewayTelemetry parsed = {0};
     GatewayTelemetryError status = GATEWAY_TELEMETRY_INVALID_ARGUMENT;
     struct json_tokener *tok = NULL;
     struct json_object *root = NULL;
-    struct json_object *values[8];
+    struct json_object *values[10];
     int id;
 
     if (topic == NULL || payload == NULL || out == NULL ||
@@ -219,10 +219,10 @@ int gateway_telemetry_parse(const char *topic, const void *payload,
         }
     }
     status = GATEWAY_TELEMETRY_INVALID_FIELDS;
-    if (!json_object_is_type(root, json_type_object) || json_object_object_length(root) != 8) {
+    if (!json_object_is_type(root, json_type_object) || json_object_object_length(root) != 10) {
         goto done;
     }
-    for (size_t i = 0; i < 8; ++i) {
+    for (size_t i = 0; i < 10; ++i) {
         /* get_ex distinguishes an absent key from a present JSON null. */
         if (!json_object_object_get_ex(root, keys[i], &values[i])) {
             goto done;
@@ -274,6 +274,14 @@ int gateway_telemetry_parse(const char *topic, const void *payload,
     if (status != GATEWAY_TELEMETRY_OK) {
         goto done;
     }
+    status = measurement(values[8], &parsed.vibration_rms, &parsed.vibration_rms_present);
+    if (status != GATEWAY_TELEMETRY_OK) {
+        goto done;
+    }
+    status = measurement(values[9], &parsed.rpm, &parsed.rpm_present);
+    if (status != GATEWAY_TELEMETRY_OK) {
+        goto done;
+    }
     *out = parsed;
 
 done:
@@ -290,7 +298,7 @@ const char *gateway_telemetry_error_string(GatewayTelemetryError error)
     case GATEWAY_TELEMETRY_INVALID_ARGUMENT: return "Argumento ou comprimento inválido";
     case GATEWAY_TELEMETRY_INVALID_TOPIC: return "Tópico MQTT inválido";
     case GATEWAY_TELEMETRY_INVALID_JSON: return "JSON inválido, incompleto ou UTF-8 inválido";
-    case GATEWAY_TELEMETRY_INVALID_FIELDS: return "Esperadas exatamente as oito propriedades obrigatórias";
+    case GATEWAY_TELEMETRY_INVALID_FIELDS: return "Esperadas exatamente as dez propriedades obrigatórias";
     case GATEWAY_TELEMETRY_INVALID_TYPE: return "Tipo JSON incompatível";
     case GATEWAY_TELEMETRY_INVALID_VALUE: return "Valor numérico ou estado inválido";
     case GATEWAY_TELEMETRY_INVALID_TEXT: return "Texto vazio, excessivo ou com NUL embutido";

@@ -15,6 +15,10 @@ typedef struct {
     bool current_present;
     double power;
     bool power_present;
+    double vibration_rms;      /* SIM-11; unit not stated by the dataset */
+    bool vibration_rms_present;
+    double rpm;                /* SIM-11 */
+    bool rpm_present;
     int failure_within_24h;
 } GatewayTelemetry;
 
@@ -33,7 +37,7 @@ typedef enum {
 
 /* Returns 0/-1. out is unchanged on failure. error is optional and is set
  * to OK on success. topic must be NUL-terminated; payload need not be.
- * All eight fields are required. Missing measurements have present=false
+ * All ten fields are required. Missing measurements have present=false
  * and value=0. No I/O. json-c resources are released before returning.
  * Duplicate JSON keys follow json-c's last-value-wins behavior (see README).
  */
