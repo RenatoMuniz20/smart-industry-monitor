@@ -27,10 +27,10 @@ O dataset não informa a unidade da vibração; nenhuma unidade é atribuída.
 
 ## InterSCity
 
-| Capability | Origem | Tipo |
-| --- | --- | --- |
-| `sim_vibration_rms` | `vibration_rms` | `sensor` |
-| `sim_rpm` | `rpm` | `sensor` |
+| id | Capability | Origem | Tipo |
+| --- | --- | --- | --- |
+| 50 | `sim_vibration_rms` | `vibration_rms` | `sensor` (`function` 0) |
+| 51 | `sim_rpm` | `rpm` | `sensor` (`function` 0) |
 
 Medição ausente omite a capability; zero é enviado, como nas outras medições.
 As dez máquinas não precisam ser recadastradas: o Data Collector associa uma
@@ -41,9 +41,10 @@ consulta antes, cria só o que responde 404, interrompe em qualquer resposta
 inesperada e nunca apaga nada. O script de cadastro de máquinas passou a conferir
 as seis capabilities.
 
-**A criação na instância compartilhada não tem volta** (capabilities não devem ser
-apagadas). Ela deve ser feita uma vez, por quem a equipe autorizar, antes do
-primeiro envio real com o contrato novo:
+As duas foram criadas em 22/11/2026, depois de uma simulação (`--dry-run`) que
+mostrou que nenhuma existia. A consulta seguinte listou as seis capabilities `sim_`
+(ids 46 a 51), todas do tipo sensor. A criação não tem volta: capabilities não
+devem ser apagadas na instância compartilhada. Comandos usados:
 
 ```sh
 bash iot-gateway/scripts/create-interscity-capabilities.sh --dry-run
@@ -80,7 +81,10 @@ Feita durante a implementação, antes de rodar no ambiente da equipe:
 | Script de capabilities contra um catálogo falso local | Simulação, criação e segunda execução sem duplicar |
 | Gateway e Backend | Somente checagem de sintaxe C; dependem de json-c, libmosquitto, libcurl e libmicrohttpd |
 
-A validação completa fica no ambiente da equipe:
+No ambiente da equipe (Ubuntu 24.04/WSL, 22/11/2026), todos os alvos abaixo
+terminaram com código 0, e o backend chegou a 51 verificações.
+
+Comandos da validação completa:
 
 ```sh
 make -C dataset-replayer clean test test-mqtt

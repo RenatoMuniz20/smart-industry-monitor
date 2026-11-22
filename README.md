@@ -43,7 +43,7 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | — | Escalabilidade | Pendente | — |
 | SIM-10.1 | Mosquitto e IoT Gateway em Compose com SQLite persistente | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
 | SIM-10.2 | Dataset Replayer e Backend REST no Compose | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
-| SIM-11 | Vibração (`vibration_rms`) e rotação (`rpm`) em todo o pipeline | Implementada; falta criar as capabilities na UFMA | [SIM-11](docs/sim-11-vibracao-rpm.md) |
+| SIM-11 | Vibração (`vibration_rms`) e rotação (`rpm`) em todo o pipeline | Concluída; capabilities 50 e 51 criadas na UFMA | [SIM-11](docs/sim-11-vibracao-rpm.md) |
 | — | Containerização do Dashboard e implantação em nuvem | Pendente | — |
 
 ## Estrutura do repositório
