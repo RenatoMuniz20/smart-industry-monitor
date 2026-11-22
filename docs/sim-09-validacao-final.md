@@ -170,7 +170,7 @@ export UBSAN_OPTIONS=halt_on_error=1
 | Timeout já armazenado, sem segundo POST | recovery_tests, A |
 | Collector indisponível e retomada sem reinício | recovery_tests, C/F |
 | Reinicialização inflight antes de reenvio | recovery_tests, D, e restart_outage_test |
-| UUID/data incompatível, sem confirmação/reenvio | recovery_tests, G (10 respostas), test_interscity_client (24 consultas) |
+| UUID/data incompatível, sem confirmação/reenvio | recovery_tests, G (10 respostas), test_interscity_client (25 consultas) |
 | Rollback de cursor e remoção | Cenários de confirmação após HTTP 201 e após consulta; test_telemetry_queue |
 | blocked preservado, próximo elegível entregue | test_delivery_worker, C |
 | Modo direto SIM-08 | test_interscity_gateway --mqtt: deduplicação, consulta e reenvio único; test_cli --mqtt: reconexão |
@@ -179,7 +179,7 @@ export UBSAN_OPTIONS=halt_on_error=1
 ## Contrato `/last` e pendência real
 
 O cliente envia `POST /collector/resources/data/last` com `{"uuids":["<UUID>"]}`.
-Espera HTTP 200 com `resources[0].id` textual igual ao UUID solicitado e séries
+Espera HTTP 200 com `resources[0].uuid` textual igual ao UUID solicitado e séries
 em `capabilities`, cujos elementos possuem `date`. As datas devem ser UTC
 completas, `YYYY-MM-DDTHH:MM:SSZ` ou `YYYY-MM-DDTHH:MM:SS.dígitosZ`. Só depois
 se reduzem aos 19 caracteres comparados. Offsets e ausência de Z são rejeitados.
@@ -187,9 +187,11 @@ Recursos vazios/séries vazias podem indicar ausência; HTTP 404 só indica aus�
 com objeto JSON cujo error é exatamente `Resource not found`. Outros formatos
 são erros de consulta, não autorização de reenvio.
 
-**Pendente:** compatibilidade com respostas reais da instância UFMA. Nenhuma
-requisição real foi executada nesta rodada. Os mocks comprovam o contrato do
-cliente, não o formato atual do serviço remoto.
+**Resolvido em 22/11/2026:** a consulta real à instância UFMA (máquina 1)
+retornou o recurso com os campos `uuid` e `capabilities`, sem `id`. O cliente
+exigia `id`, o que faria toda reconciliação falhar e manteria a cabeça da fila
+inflight indefinidamente. O cliente passou a ler `uuid`, e os mocks seguem o
+formato real.
 
 Procedimento manual proposto, a executar pelo integrante autorizado somente
 para consulta, escolhendo UUID real existente no mapa e com amostras conhecidas:
@@ -205,7 +207,7 @@ curl --silent --show-error --connect-timeout 3 --max-time 10 \
 ```
 
 Embora use POST, esse endpoint é uma consulta. Não chamar `/adaptor/.../data`.
-Conferir status, id, tipos das séries e datas Z/com fração. Resposta vazia não
+Conferir status, uuid, tipos das séries e datas Z/com fração. Resposta vazia não
 comprova compatibilidade de uma resposta positiva. Registrar somente trecho
 mínimo necessário e o resultado observado. Não aceitar offsets pelo prefixo.
 
@@ -266,7 +268,7 @@ da equipe: persistência, reinício e recuperação automática foram demonstrad
 no mesmo cenário, sem perda das cinco mensagens já persistidas e sem alterações
 arquiteturais. Não equivale a homologação da instância real ou do futuro deploy.
 
-Pendências explícitas: conferir formato real do Collector em consulta autorizada;
+Pendências explícitas (o formato real do Collector foi conferido em 22/11/2026):
 repetir backend com libmicrohttpd; repetir o caso de locale quando disponível;
 aprovar a exceção proposta no TAP; configurar volume/permissões/rede/parada no
 Compose futuro e demonstrar reinício com esse volume. Nenhum staging, commit,

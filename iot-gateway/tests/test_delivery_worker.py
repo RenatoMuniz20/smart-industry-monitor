@@ -98,7 +98,7 @@ def send(port, minute):
 
 
 def collected(timestamp='2024-01-01T00:00:00'):
-    return {'resources': [{'id': UUID_OK, 'capabilities': {
+    return {'resources': [{'uuid': UUID_OK, 'capabilities': {
         'sim_operating_state': [{'value': 'IDLE', 'date': timestamp + '.000Z'}]}}]}
 
 
@@ -249,11 +249,11 @@ def recovery_tests(root, mapping, port):
                (200, json.dumps(collected()).encode() + b'\x00'),
                (404, b'not JSON: Resource not found')]
     wrong_uuid = collected()
-    wrong_uuid['resources'][0]['id'] = '00000000-0000-4000-8000-000000000400'
+    wrong_uuid['resources'][0]['uuid'] = '00000000-0000-4000-8000-000000000400'
     missing_id = collected()
-    del missing_id['resources'][0]['id']
+    del missing_id['resources'][0]['uuid']
     invalid_id = collected()
-    invalid_id['resources'][0]['id'] = 42
+    invalid_id['resources'][0]['uuid'] = 42
     invalid_suffix = collected()
     invalid_suffix['resources'][0]['capabilities']['sim_operating_state'][0]['date'] = '2024-01-01T00:00:00XINVALID'
     answers.extend((200, body) for body in (wrong_uuid, missing_id, invalid_id, invalid_suffix))
