@@ -1,0 +1,366 @@
+# SIM-10 — Containerização local
+
+As seções iniciais registram a SIM-10.1. A seção SIM-10.2 ao final descreve o
+Compose atual: Mosquitto, Gateway e Backend por padrão, com Replayer opcional.
+
+## Base e escopo da SIM-10.1 (histórico)
+
+Branch `feature/docker-compose`, working tree inicialmente limpo. HEAD e main
+local: `13050d8e6b4c8c7c86776c0514395e4851722603`, merge da PR #10 (`fix/sim-09`).
+A ancestralidade do encerramento SIM-09 (`a65d5e1`) em main foi conferida antes
+da implementação. Não houve merge, alteração da main ou mudança em C/Makefiles.
+
+Dois serviços, na rede padrão do Compose: Mosquitto e IoT Gateway. InterSCity
+continua externo; replayers, backend e dashboard não foram containerizados.
+
+## Decisões
+
+- `iot-gateway/Dockerfile`: build em Arch Linux com `make all` existente;
+  estágio final sem compiladores. Bibliotecas json-c, libmosquitto, libcurl e
+  SQLite, além de certificados CA para HTTPS. O CLI sqlite3 permite diagnóstico.
+- A tentativa inicial com Bookworm falhou: json-c 0.16 não fornece
+  `json_tokener_error_memory`. Trixie com json-c 0.18 compilou, mas falhou no caso
+  JSON válido `test_valid_lexemes` da suíte existente. A presença da API no
+  [header 0.18](https://github.com/json-c/json-c/blob/json-c-0.18/json_tokener.h)
+  não bastou para garantir compatibilidade de comportamento. A imagem final
+  Arch usa json-c 0.19, como a SIM-09; os testes C passaram. Não foi alterado C
+  ou enfraquecido teste para acomodar bibliotecas antigas. O estágio comum de
+  dependências mantém as mesmas bibliotecas no build e na execução.
+- Gateway executa diretamente como UID/GID `10001:10001`. A imagem prepara
+  `/data` com esse proprietário e modo 0750. Um volume novo herda essa preparação;
+  volumes existentes precisam ter permissões compatíveis. Não há chown de
+  volumes arbitrários na inicialização nem execução do Gateway como root.
+- `gateway_data` monta o **diretório** `/data`. Banco, WAL e SHM ficam juntos em
+  armazenamento local adequado ao WAL. Nome físico padrão:
+  `smart-industry-monitor_gateway_data`, prefixado pelo projeto Compose.
+- Mapa do repositório montado somente leitura em
+  `/etc/smart-industry/machines.conf`; CLI aponta explicitamente esse caminho.
+- `--host mosquitto --port 1883` usa DNS da rede Compose. A configuração Docker
+  escuta em `0.0.0.0` **dentro** do contêiner. A publicação no host é somente
+  `127.0.0.1:${MQTT_PORT:-1883}`. O arquivo de desenvolvimento local não mudou.
+- Mosquitto roda como UID/GID 1883, sem persistência MQTT, logs no stdout.
+  Healthcheck publica mensagem vazia em `smart-industry/health` com QoS 1,
+  fora do filtro de telemetrias; Gateway inicia após broker saudável.
+- Ambos usam `restart: unless-stopped`, sem réplicas adicionais. ENTRYPOINT
+  direto preserva SIGTERM; Gateway tem timeout HTTP de 5000 ms e tolerância de
+  parada de 30 s para concluir requisição/transação e join.
+
+## Execução e destino HTTP
+
+```sh
+docker compose config
+docker compose build gateway
+docker compose up -d mosquitto gateway
+docker compose logs --tail=30 mosquitto gateway
+```
+
+`INTERSCITY_URL` é interpolada pelo Compose no argumento `--interscity-url`;
+não exige suporte novo a variáveis no código C. O valor padrão é
+**`http://127.0.0.1:9`**, endereço deliberadamente indisponível dentro do Gateway.
+Isso permite testar persistência sem publicar na instância compartilhada. Nesse
+modo, mensagens ficam inflight aguardando reconciliação; não há entrega HTTP.
+
+Para outro destino autorizado, definir antes do up:
+
+```sh
+export INTERSCITY_URL='http://endereco-autorizado:8000'
+```
+
+O endereço deve ser acessível do contêiner: localhost é o próprio contêiner.
+Para HTTPS, certificados CA já estão instalados e a validação TLS existente
+permanece ativa. O bundle foi conferido, mas não houve teste HTTPS real na UFMA.
+O destino precisa corresponder aos UUIDs do mapa e das pendências existentes.
+Não apontar esta demonstração para a UFMA sem autorização específica.
+
+Se a porta local 1883 estiver ocupada, definir `export MQTT_PORT=18883` antes de
+executar os comandos. Não encerre brokers externos para liberar a porta.
+
+O modo fila é obrigatório no Compose: `--queue-db /data/telemetry.db`.
+A persistência SQLite não implica persistência MQTT ou garantia exactly-once;
+valem as limitações da [SIM-09](sim-09-fila-duravel.md).
+
+## Reprodução da verificação de persistência
+
+Usar projeto isolado e o mesmo nome de projeto em todos os comandos:
+
+```sh
+export COMPOSE_PROJECT_NAME=sim101-validation
+export MQTT_PORT=18883
+export INTERSCITY_URL=http://127.0.0.1:9
+docker compose config
+docker compose up -d --build mosquitto gateway
+docker compose logs gateway
+# Aguardar a linha Gateway pronto antes de publicar.
+docker compose exec -T gateway id
+docker compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
+  'PRAGMA journal_mode; PRAGMA integrity_check; SELECT count(*) FROM telemetry_queue;'
+docker compose exec -T gateway ls -ln /data
+```
+
+O banco novo deve estar vazio. Para a amostra **sintética**, somente com o destino
+local indisponível acima, publicar pelo cliente da própria imagem Mosquitto:
+
+```sh
+docker compose exec -T mosquitto mosquitto_pub -h mosquitto -q 1 \
+  -t smart-industry/machines/1/telemetry \
+  -m '{"machine_id":1,"machine_type":"CNC","timestamp":"2024-01-01 00:00:00","temperature":49.51,"current":5.1,"power":null,"state":"IDLE","failure_within_24h":0}'
+docker compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
+  'SELECT machine_id,timestamp,status,attempt_count FROM telemetry_queue;'
+```
+
+Aguardar o estado inflight e guardar a saída. Conferir mounts pelo ID retornado
+por `docker compose ps -q gateway`, usando `docker inspect <id>`: `/data` deve
+ser volume nomeado RW e o mapa bind RO.
+
+```sh
+docker compose stop gateway
+docker compose logs --tail=15 gateway
+# Conferir ExitCode=0 no docker inspect do contêiner parado.
+docker compose start gateway
+# Aguardar prontidão e conferir a mesma linha SQL.
+docker compose up -d --force-recreate --no-deps gateway
+# Aguardar prontidão e conferir novamente linha SQL e mounts.
+docker compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
+  'PRAGMA journal_mode; PRAGMA integrity_check; SELECT machine_id,timestamp,status,attempt_count FROM telemetry_queue;'
+docker compose down
+docker volume inspect sim101-validation_gateway_data
+```
+
+Não usar `down -v`. Recriar com outro nome de projeto cria outro volume, não
+migra os dados. Preservar diretório e WAL/SHM; não copiar apenas o arquivo do
+banco enquanto estiver ativo. Volume antigo com proprietário incompatível exige
+ajuste administrativo dirigido ao volume correto para UID/GID 10001.
+
+## Resultados observados na SIM-10.1 (histórico)
+
+Docker Engine 29.9.2 e Compose 5.6.1 disponíveis; acesso ao daemon exigiu execução
+fora do sandbox. Validação no projeto isolado, sem interferir em contêineres
+preexistentes:
+
+| Verificação | Resultado |
+| --- | --- |
+| compose config | Configuração válida, dois serviços e volume gateway_data |
+| compose build gateway | Passou em Arch Linux, make all sem warnings GCC |
+| Testes C na imagem final, sem rede | Parser JSON, fila SQLite, mapeamento, payload e Subscriber passaram |
+| up mosquitto gateway | Broker saudável, CONNACK/SUBACK e Gateway pronto |
+| Inicialização SQLite | journal_mode=wal e integrity_check=ok; banco anterior preservado na troca da imagem |
+| Usuário/permissões | UID/GID 10001; /data 0750; banco/WAL/SHM pertencem a 10001:10001 |
+| Mapa e certificados | Mapa RO por inspect; CA bundle presente e legível |
+| Persistência real | Duas amostras sintéticas: cabeça inflight:1 e outra pending:0, sem HTTP externo |
+| stop/start e force-recreate | SIGTERM com saída 0; mesmo registro, payload e attempt_count no mesmo volume |
+| down sem -v | Contêineres/rede do teste removidos; volume nomeado permanece |
+
+Trechos observados:
+
+```text
+Fila SQLite habilitada (10 máquinas mapeadas; worker HTTP independente).
+Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
+uid=10001(gateway) gid=10001(gateway)
+10001:10001 750 /data
+10001:10001 644 /data/telemetry.db
+10001:10001 644 /data/telemetry.db-wal
+10001:10001 644 /data/telemetry.db-shm
+```
+
+O volume `sim101-validation_gateway_data` ficou preservado para revisão e contém
+**duas amostras sintéticas**. Não reutilizá-lo com destino real. As imagens de build
+ficaram em cache; nenhum contêiner de teste ficou executando. Nenhuma telemetria
+foi publicada na UFMA.
+
+O primeiro ensaio dos testes C não montou a fixture do mapa e foi repetido com
+`config/` somente leitura. Uma consulta auxiliar também foi corrigida para usar
+aspas simples em literais SQL (SQLite atual não aceita aquela forma com aspas
+duplas). Essas correções ficaram no roteiro temporário de verificação; não
+alteraram a aplicação nem as suítes existentes.
+
+Bibliotecas da imagem final observadas: json-c 0.19, libmosquitto 2.1.2,
+libcurl 8.23.0 e SQLite 3.54.1. A instalação de pacotes informou alguns itens já
+atualizados; não foram warnings do compilador. O CLI sqlite3 e as ferramentas
+Mosquitto vêm dos pacotes Arch usados pelas bibliotecas; somente o Gateway é
+iniciado no seu serviço.
+
+Para repetir os cinco testes C na imagem de build, sem instalar ferramentas
+no host (executar da raiz do repositório):
+
+```sh
+docker build --target build -t sim101-gateway-build iot-gateway
+docker run --rm --network none \
+  --mount "type=bind,source=$(pwd)/iot-gateway/tests,target=/src/tests,readonly" \
+  --mount "type=bind,source=$(pwd)/config,target=/config,readonly" \
+  sim101-gateway-build sh -ec '
+make build/test_gateway_telemetry build/test_telemetry_queue build/test_interscity_mapping build/test_interscity_payload build/test_mqtt_subscriber
+./build/test_gateway_telemetry
+./build/test_telemetry_queue
+./build/test_interscity_mapping
+./build/test_interscity_payload
+./build/test_mqtt_subscriber'
+```
+
+Não foram repetidas as suítes completas MQTT/HTTP/E2E da SIM-09 nesta rodada;
+foram executados esses cinco testes C e as verificações Docker acima. Não houve
+teste de entrega em serviço HTTP externo. O volume de validação continua com
+pendências porque o endpoint local de teste foi mantido indisponível.
+
+## Limitações e revisão
+
+- Mosquitto anônimo, sem TLS, adequado à demonstração local. Não expor publicamente.
+- A porta publicada é loopback; outros serviços da rede Compose alcançam o broker.
+- Porta ocupada e volume antigo sem permissão causam falha; verificar logs.
+- Não escalar o Gateway: o arquivo SQLite deve ter um único worker consumidor.
+- Tags de imagens e pacotes recebem atualizações; esta etapa não fixa digests.
+- Timeout HTTP é 5 s; revisar grace period ao alterá-lo. DNS/TCP síncrono pode
+  exceder a expectativa prática de tempo; manter as limitações conhecidas.
+- SQLite não tem limite de capacidade configurável; acompanhar espaço em disco.
+- HTTPS real, entrega ao InterSCity externo e demais componentes ficam para
+  validações posteriores autorizadas. O teste desta etapa verifica fila durável,
+  não entrega externa nem exactly-once.
+
+
+## SIM-10.2 — Dataset Replayer e Backend REST
+
+Base: branch `feature/docker-compose`, working tree inicialmente limpo, HEAD
+`f18e04a` (`feat: docker`). Nenhum C, Makefile, launcher ou arquivo de configuração
+da SIM-10.1 foi alterado. O volume gateway_data e os serviços existentes foram
+preservados; o Backend e o Replayer foram acrescentados ao Compose.
+
+### Imagens e execução
+
+- `dataset-replayer/Dockerfile`: build multi-stage com Makefile atual. Runtime
+  Arch com Bash (verificação explícita >=5.1) e libmosquitto. UID/GID 10001;
+  ENTRYPOINT executa diretamente o Bash com o launcher original. O executável
+  fica em `/app/dataset-replayer/build/`, mantendo o caminho relativo esperado.
+- O CSV é bind somente leitura em `/app/data/predictive_maintenance_v3.csv`.
+  Não integra a imagem nem precisa estar no contexto de build. `CSV_PATH` aponta
+  explicitamente esse arquivo. Scripts/configuração/dataset não são reimplementados.
+- `replayer` tem profile `replay`, `restart: "no"`, `MQTT_HOST=mosquitto` e porta
+  **interna** 1883. A variável MQTT_PORT do host altera somente a publicação do
+  broker, não a porta interna dos produtores. LIMIT e INTERVAL_MS configuram o
+  launcher, com padrões 10 e 1000 respectivamente.
+- Os dez IDs continuam 1,2,3,6,7,8,9,11,12,13. Há dez processos C independentes
+  dentro do contêiner, gerenciados pelo launcher original, não dez réplicas.
+- `backend/Dockerfile`: build pelo Makefile atual, runtime Arch com libmicrohttpd,
+  libcurl, json-c e CA. UID/GID 10001; ENTRYPOINT direto preserva SIGTERM.
+  CLI explícita: `--bind 0.0.0.0 --port 8080`, mapa RO no mesmo caminho do Gateway,
+  URL interpolada de INTERSCITY_URL e timeout HTTP de 5000 ms. Host publicado
+  somente em `127.0.0.1:8080:8080`, healthcheck GET local `/api/health`.
+- O Backend não depende do Gateway: consulta o InterSCity, não o SQLite. Seu
+  health indica servidor REST ativo, não disponibilidade do middleware.
+- Os contextos `.dockerignore` incluem somente Makefile, fontes/headers e,
+  no Replayer, o launcher necessário. Build/testes do host não entram nas imagens.
+
+### Procedimento seguro e prontidão
+
+Usar um projeto novo, diferente da validação SIM-10.1. Exemplo de demonstração:
+
+```sh
+export COMPOSE_PROJECT_NAME=sim102-demo
+export MQTT_PORT=18885
+export INTERSCITY_URL=http://127.0.0.1:9
+docker compose config
+docker compose build gateway replayer backend
+docker compose up -d
+docker compose ps
+curl --fail http://127.0.0.1:8080/api/health
+docker compose logs gateway
+# Só continuar após Gateway pronto na inicialização atual (conexão + SUBACK).
+LIMIT=3 INTERVAL_MS=1000 docker compose --profile replay up -d replayer
+docker compose wait replayer
+docker compose logs replayer
+docker compose exec -T gateway sqlite3 -readonly /data/telemetry.db \
+  'SELECT machine_id,count(*) FROM telemetry_queue GROUP BY machine_id ORDER BY machine_id;'
+docker compose --profile replay down
+```
+
+Se health/prontidão ainda não aparecerem, aguardar e conferir novamente, sem
+iniciar os produtores. Não executar os quatro serviços simultaneamente com
+`--profile replay up` antes dessa conferência. A dependência service_started
+não comprova SUBACK e não foi apresentada como tal. Em caso de queda do broker,
+aguardar a confirmação de reconexão/assinatura, não uma linha antiga de logs.
+O teste automatizado temporário aguardou explicitamente Gateway pronto antes de
+iniciar o profile e também o SUBACK do assinante de observação.
+
+A porta 8080 precisa estar livre; não encerrar serviços externos para liberá-la.
+O exemplo usa HTTP deliberadamente indisponível dentro de cada contêiner.
+Nenhum envio/consulta ao InterSCity real foi realizado. O Backend devolve 200
+em `/api/health` e 502 em `/api/machines/latest` enquanto o middleware não está
+acessível. A fila não será drenada nessa configuração de segurança.
+
+Repetir os mesmos timestamps gera duplicatas ignoradas, não novas linhas. Para
+observar inserções em banco vazio, usar um projeto/volume novo; não apagar nem
+reutilizar o volume SIM-10.1 para isso. Não alterar o destino de um volume com
+pendências sem conferir seus UUIDs e conteúdo. A porta 8080 é fixa nesta etapa.
+
+### Resultados efetivamente observados
+
+Validação executada no projeto **sim102-validation**, com volume
+**sim102-validation_gateway_data**, sem reutilizar/montar o volume
+sim101-validation_gateway_data. O inspect deste último permaneceu inalterado.
+
+| Verificação | Resultado |
+| --- | --- |
+| compose config | Passou, quatro serviços; replay opcional |
+| Build Replayer/Backend | Makefiles existentes, sem warnings GCC; Bash 5.3.20 verificado |
+| up padrão | Mosquitto, Gateway e Backend ativos; nenhum Replayer iniciado |
+| Backend health | HTTP 200 com {"status":"ok"}; porta somente loopback |
+| Endpoint HTTP seguro | CLI dos dois serviços conferida com http://127.0.0.1:9; /latest retornou 502 |
+| Replay LIMIT=3 / INTERVAL_MS=1000 | Dez processos observados simultaneamente, IDs corretos |
+| Publicação | 30 PUBACKs e 30 mensagens observadas nos dez tópicos |
+| Integridade | Oito campos confrontados com CSV, tipos/timestamps/null e ordem por máquina preservados |
+| SQLite | 30 registros, três por ID; 1 inflight e 29 pending; cursor vazio; integridade ok |
+| Conclusão normal do launcher | Saída 0; dez filhos finalizados; RestartCount=0 |
+| SIGTERM do launcher (LIMIT=100) | Saída 143 esperada do trap; dez filhos coletados; nenhum reinício |
+| Backend SIGTERM/start | Saída 0, log encerrando backend, health 200 após reinício |
+| Regressão Gateway | SIGTERM=0, recriação preservou snapshot das 30 linhas, journal_mode=wal e integrity_check=ok |
+| down sem -v | Nenhum contêiner do projeto ativo; volume SIM-10.2 preservado |
+| Backend make test na imagem de build | 47 verificações passaram, só servidores falsos locais |
+| Replayer make test na imagem de build | Concluiu com código 0; SKIP parcial do locale numérico alternativo |
+
+Contagem observada no SQLite:
+
+```text
+1|3, 2|3, 3|3, 6|3, 7|3, 8|3, 9|3, 11|3, 12|3, 13|3
+inflight|1
+pending|29
+```
+
+A segunda execução, interrompida por sinal, repetiu timestamps já presentes e
+não criou registros adicionais. Os PIDs dos dez filhos foram conferidos como
+inexistentes após término normal e SIGTERM. O volume SIM-10.2 contém 30 amostras
+históricas de validação; não o apontar para a instância compartilhada. Ambos os
+volumes de validação permanecem para revisão; não foi usado down -v.
+
+O primeiro ensaio de `make test` do Replayer parou porque faltava `diff`, exigido
+pelo teste shell existente. A repetição instalou diffutils e Python somente no
+contêiner temporário de build e passou, sem editar testes. Essas ferramentas não
+foram adicionadas às imagens de runtime. O único SKIP foi locale alternativo
+indisponível, não considerado aprovado. As suítes completas MQTT/E2E do Gateway
+e MQTT do Replayer não foram repetidas; o cenário Compose acima exercitou
+publicação, recepção, persistência e sinais com executáveis reais. Não houve
+teste HTTPS real, dashboard, autenticação ou entrega externa nesta etapa.
+
+A prontidão do Gateway permanece uma verificação explícita do procedimento,
+não uma garantia automática do profile. Continuam as limitações SIM-09 e as
+ressalvas da base Arch/pacotes sem fixação por digest. `stop_grace_period` é de
+15 s no Replayer e 30 s no Backend/Gateway; respeitar os limites HTTP/DNS já
+documentados ao revisar esses valores. Nenhum serviço adicional foi criado.
+
+
+Para repetir as suítes locais nas imagens de build (Python/diffutils ficam só
+nos contêineres temporários e as requisições dos testes usam mocks locais):
+
+```sh
+docker build --target build -t sim102-backend-build backend
+docker run --rm \
+  --mount "type=bind,source=$(pwd)/backend/tests,target=/src/tests,readonly" \
+  --mount "type=bind,source=$(pwd)/config,target=/config,readonly" \
+  sim102-backend-build sh -ec 'pacman -S --noconfirm --needed python; make test'
+docker build --target build -t sim102-replayer-build dataset-replayer
+docker run --rm \
+  --mount "type=bind,source=$(pwd)/dataset-replayer/tests,target=/src/tests,readonly" \
+  --mount "type=bind,source=$(pwd)/dataset-replayer/scripts,target=/src/scripts,readonly" \
+  --mount "type=bind,source=$(pwd)/data,target=/data,readonly" \
+  sim102-replayer-build sh -ec 'pacman -S --noconfirm --needed python diffutils; make test'
+```
+
+O contêiner de teste usa rede para obter suas ferramentas; as suítes não acessam
+a instância real. Não executar o alvo `smoke-real` como parte desta validação.

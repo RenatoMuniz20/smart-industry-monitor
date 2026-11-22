@@ -1,0 +1,97 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    user: "1883:1883"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./config/mosquitto/mosquitto-docker.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "127.0.0.1", "-p", "1883", "-t", "smart-industry/health", "-n", "-q", "1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  gateway:
+    build:
+      context: ./iot-gateway
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    command:
+      - --host
+      - mosquitto
+      - --port
+      - "1883"
+      - --client-id
+      - smart-industry-gateway
+      - --interscity-url
+      - "${INTERSCITY_URL:-http://127.0.0.1:9}"
+      - --interscity-timeout-ms
+      - "5000"
+      - --interscity-map
+      - /etc/smart-industry/machines.conf
+      - --queue-db
+      - /data/telemetry.db
+    volumes:
+      - gateway_data:/data
+      - ./config/interscity/machines.conf:/etc/smart-industry/machines.conf:ro
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command:
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --machines
+      - /etc/smart-industry/machines.conf
+      - --interscity-url
+      - "${INTERSCITY_URL:-http://127.0.0.1:9}"
+      - --interscity-timeout-ms
+      - "5000"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config/interscity/machines.conf:/etc/smart-industry/machines.conf:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+
+  # Start explicitly, only after Gateway pronto (SUBACK) appears in gateway logs.
+  # service_started below does not by itself prove subscription readiness.
+  replayer:
+    build:
+      context: ./dataset-replayer
+    profiles: ["replay"]
+    restart: "no"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      LIMIT: "${LIMIT:-10}"
+      INTERVAL_MS: "${INTERVAL_MS:-1000}"
+      CSV_PATH: /app/data/predictive_maintenance_v3.csv
+    volumes:
+      - ./data/predictive_maintenance_v3.csv:/app/data/predictive_maintenance_v3.csv:ro
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
+
+volumes:
+  gateway_data:
