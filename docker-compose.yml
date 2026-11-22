@@ -1,0 +1,46 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    user: "1883:1883"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./config/mosquitto/mosquitto-docker.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "127.0.0.1", "-p", "1883", "-t", "smart-industry/health", "-n", "-q", "1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  gateway:
+    build:
+      context: ./iot-gateway
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    command:
+      - --host
+      - mosquitto
+      - --port
+      - "1883"
+      - --client-id
+      - smart-industry-gateway
+      - --interscity-url
+      - "${INTERSCITY_URL:-http://127.0.0.1:9}"
+      - --interscity-timeout-ms
+      - "5000"
+      - --interscity-map
+      - /etc/smart-industry/machines.conf
+      - --queue-db
+      - /data/telemetry.db
+    volumes:
+      - gateway_data:/data
+      - ./config/interscity/machines.conf:/etc/smart-industry/machines.conf:ro
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+
+volumes:
+  gateway_data:

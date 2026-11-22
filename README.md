@@ -39,7 +39,8 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | SIM-08 | Tolerância a falhas no Gateway: reconexão MQTT, deduplicação e consulta antes do reenvio | Concluída | [SIM-08](docs/sim-08-tolerancia-falhas.md) |
 | — | Dashboard web | Pendente | — |
 | — | Escalabilidade | Pendente | — |
-| — | Docker Compose e implantação em nuvem | Pendente | — |
+| SIM-10.1 | Mosquitto e IoT Gateway em Compose com SQLite persistente | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
+| — | Containerização dos demais componentes e implantação em nuvem | Pendente | — |
 
 ## Estrutura do repositório
 
@@ -131,3 +132,17 @@ amostras antigas podem ser reenviadas. Cuidados em
   essa configuração não é adequada para implantação exposta.
 - O backend não tem autenticação. Ele escuta só em `127.0.0.1` por padrão;
   `--bind 0.0.0.0` o expõe na rede. Detalhes em [SIM-06](docs/sim-06-backend.md).
+
+
+## Compose local — SIM-10.1
+
+Mosquitto e Gateway podem ser iniciados com `docker compose build gateway` e
+`docker compose up -d mosquitto gateway`. O Gateway usa obrigatoriamente
+`--queue-db /data/telemetry.db`, volume nomeado e mapa somente leitura. MQTT é
+publicado apenas em `127.0.0.1:1883` (`MQTT_PORT` permite outra porta local).
+
+O destino padrão `INTERSCITY_URL=http://127.0.0.1:9` é deliberadamente indisponível
+**dentro do contêiner**, para validar a fila sem enviar à UFMA. Configurar outro
+destino somente quando autorizado. `docker compose down` preserva o volume;
+não usar `-v` para conservar pendências. Procedimento, permissões, resultados e
+limitações: [SIM-10.1](docs/sim-10-containerizacao.md).
