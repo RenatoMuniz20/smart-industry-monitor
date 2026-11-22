@@ -681,8 +681,8 @@ O cliente existente foi ajustado pontualmente para não converter respostas
 incompatíveis em ausência: verifica objeto completo com comprimento explícito,
 NUL bruto/conteúdo adicional, tipos das séries e datas conhecidas. HTTP 404 só
 significa ausência com objeto JSON cujo `error` é `Resource not found`. Respostas
-válidas da SIM-08 permanecem aceitas. O recurso retornado deve ter `id` textual
-igual ao UUID solicitado. Datas aceitas são exclusivamente UTC completas:
+válidas da SIM-08 permanecem aceitas. O recurso retornado deve ter `uuid` textual
+igual ao UUID solicitado, como na resposta real da instância UFMA. Datas aceitas são exclusivamente UTC completas:
 `YYYY-MM-DDTHH:MM:SSZ` ou `YYYY-MM-DDTHH:MM:SS.dígitosZ`, com ao menos um dígito
 na fração. Sufixos arbitrários, ausência de `Z` e offsets são rejeitados; não há
 comparação por prefixo entre fusos diferentes. Somente depois da validação a

@@ -105,16 +105,17 @@ isolada dos testes.
 
 ## Validação da resposta do Collector
 
-O recurso deve trazer `id` textual exatamente igual ao UUID solicitado. A data
+O recurso deve trazer `uuid` textual exatamente igual ao UUID solicitado, como
+na resposta real da instância UFMA (conferida em 22/11/2026). A data
 precisa ser completa, em UTC: `YYYY-MM-DDTHH:MM:SSZ` ou
 `YYYY-MM-DDTHH:MM:SS.dígitosZ`. Fração vazia, sufixo inválido e offsets são
 rejeitados, sem comparação de horários de fusos diferentes por prefixo.
 Somente uma resposta válida é reduzida aos segundos para comparação.
 
-As 24 consultas dos testes do cliente verificam explicitamente
+As 25 consultas dos testes do cliente verificam explicitamente
 `INTERSCITY_CLIENT_RESPONSE`,
 found=0 e saída preservada para respostas incompatíveis. No worker, UUID
-incorreto, ID ausente/não textual e data inválida mantêm inflight/cursor intactos,
+incorreto, `uuid` ausente/não textual e data inválida mantêm inflight/cursor intactos,
 sem POST de reenvio, até uma consulta válida posterior. Não foi alterada a
 arquitetura nem a política de backoff.
 

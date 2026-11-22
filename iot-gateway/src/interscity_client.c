@@ -279,7 +279,7 @@ static InterscityClientError parse_last(const char *text, size_t length, const c
     resource = json_object_array_get_idx(resources, 0);
     json_object *identifier = NULL;
     if (resource == NULL || !json_object_is_type(resource, json_type_object) ||
-        !json_object_object_get_ex(resource, "id", &identifier) ||
+        !json_object_object_get_ex(resource, "uuid", &identifier) ||
         !json_object_is_type(identifier, json_type_string) ||
         json_object_get_string_len(identifier) != 36 ||
         memcmp(json_object_get_string(identifier), uuid, 36) != 0 ||

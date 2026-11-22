@@ -32,21 +32,24 @@ LOCK = threading.Lock()
 def collector_cases():
     uuid = '00000000-0000-4000-8000-000000000201'
     def response(date='2024-01-01T00:00:00.000Z'):
-        return {'resources': [{'id': uuid, 'capabilities': {
+        return {'resources': [{'uuid': uuid, 'capabilities': {
             'sim_operating_state': [{'value': 'IDLE', 'date': date}]}}]}
     cases = [('UTC sem fração', response('2024-01-01T00:00:00Z'), True),
              ('UTC com fração', response(), True),
              ('fração longa', response('2024-01-01T00:00:00.123456789Z'), True)]
     wrong = response()
-    wrong['resources'][0]['id'] = '00000000-0000-4000-8000-000000000400'
+    wrong['resources'][0]['uuid'] = '00000000-0000-4000-8000-000000000400'
     cases.append(('UUID diferente', wrong, False))
     missing = response()
-    del missing['resources'][0]['id']
-    cases.append(('ID ausente', missing, False))
+    del missing['resources'][0]['uuid']
+    cases.append(('UUID ausente', missing, False))
+    legacy = response()
+    legacy['resources'][0]['id'] = legacy['resources'][0].pop('uuid')
+    cases.append(('só id, sem uuid', legacy, False))
     for identifier in (None, 42, True, {}, [], '', 'not-a-uuid', uuid + '\x00'):
         invalid = response()
-        invalid['resources'][0]['id'] = identifier
-        cases.append((f'ID inválido {identifier!r}', invalid, False))
+        invalid['resources'][0]['uuid'] = identifier
+        cases.append((f'UUID inválido {identifier!r}', invalid, False))
     for date in ('2024-01-01T00:00:00XINVALID', '2024-01-01T00:00:00',
                  '2024-01-01T00:00:00.Z', '2024-01-01T00:00:00.12xZ',
                  '2024-01-01T00:00:00.000Zextra', '2024-01-01T00:00:00+00:00',
@@ -110,7 +113,7 @@ class MockAdaptor(BaseHTTPRequestHandler):
                 assert case is not None, 'consulta extra não esperada'
                 self.respond(200, json.dumps(case[1]).encode('utf-8'))
             elif uuid[-3:] == '999':  # armazenada apesar do timeout do Adaptor
-                payload = {'resources': [{'id': uuid, 'capabilities': {'sim_operating_state': [
+                payload = {'resources': [{'uuid': uuid, 'capabilities': {'sim_operating_state': [
                     {'value': 'IDLE', 'date': '2024-01-01T00:02:00.000Z'}]}}]}
                 self.respond(200, json.dumps(payload).encode('utf-8'))
             else:
