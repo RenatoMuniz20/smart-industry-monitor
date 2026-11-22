@@ -1,0 +1,52 @@
+# InterSCity falso no lugar da instância da UFMA (demonstração e testes de carga).
+# Use pelo script scripts/fake-stack.sh: ele aponta gateway e backend para o
+# falso e usa um projeto Compose separado (smart-industry-fake), com volumes
+# próprios. Assim, a fila do gateway destes testes nunca é enviada à UFMA.
+services:
+  interscity-fake:
+    build:
+      context: ./tools/interscity-fake
+    restart: unless-stopped
+    environment:
+      FAKE_HOST: 0.0.0.0
+      FAKE_PORT: "8000"
+      FAKE_RESOURCES: /etc/smart-industry/machines.conf
+      FAKE_DB: /data/interscity-fake.db
+      FAKE_LATENCY_MS: "${FAKE_LATENCY_MS:-0}"
+      FAKE_JITTER_MS: "${FAKE_JITTER_MS:-0}"
+      FAKE_STORE_DELAY_MS: "${FAKE_STORE_DELAY_MS:-0}"
+      FAKE_FAIL_RATE: "${FAKE_FAIL_RATE:-0}"
+      FAKE_MAX_INFLIGHT: "${FAKE_MAX_INFLIGHT:-0}"
+    ports:
+      - "127.0.0.1:${FAKE_INTERSCITY_PORT:-8000}:8000"
+    volumes:
+      - fake_interscity_data:/data
+      - ./config/interscity/machines.conf:/etc/smart-industry/machines.conf:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/__fake/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+
+  # O broker só é usado dentro da rede do Compose (gateway e replayers em
+  # contêineres). Sem porta no host, não disputa a 1883 com outro mosquitto.
+  mosquitto:
+    ports: !reset []
+
+  gateway:
+    depends_on:
+      interscity-fake:
+        condition: service_healthy
+
+  backend:
+    depends_on:
+      interscity-fake:
+        condition: service_healthy
+    ports: !override
+      - "127.0.0.1:${FAKE_BACKEND_PORT:-8080}:8080"
+
+volumes:
+  fake_interscity_data:
