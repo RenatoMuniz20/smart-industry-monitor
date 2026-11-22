@@ -57,10 +57,14 @@ services:
       - "${INTERSCITY_URL:-http://127.0.0.1:9}"
       - --interscity-timeout-ms
       - "5000"
+      # SIM-07: o próprio backend serve o dashboard em http://127.0.0.1:8080/
+      - --web-root
+      - /srv/dashboard
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./config/interscity/machines.conf:/etc/smart-industry/machines.conf:ro
+      - ./dashboard:/srv/dashboard:ro
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/api/health"]
       interval: 5s

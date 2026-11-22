@@ -17,7 +17,7 @@ Dataset CSV (Industrial Machine Predictive Maintenance v3)
   → HTTPS (libcurl)
   → InterSCity: Kong → Resource Adaptor → RabbitMQ → Data Collector
   → Backend REST em C (libmicrohttpd; consulta ao InterSCity por libcurl e json-c)
-  → Dashboard web (pendente)
+  → Dashboard web (HTML/CSS/JS servido pelo próprio backend com --web-root)
 ```
 
 Conceitos de Sistemas Distribuídos demonstrados até aqui: processos
@@ -39,12 +39,12 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | SIM-06 | Backend REST em C: consulta ao InterSCity e API | Concluída | [SIM-06](docs/sim-06-backend.md), [Backend](backend/README.md) |
 | SIM-08 | Tolerância a falhas no Gateway: reconexão MQTT, deduplicação e consulta antes do reenvio | Concluída | [SIM-08](docs/sim-08-tolerancia-falhas.md) |
 | SIM-09 | Fila durável SQLite e worker HTTP com reconciliação | Concluída | [Fila durável](docs/sim-09-fila-duravel.md), [Validação final](docs/sim-09-validacao-final.md) |
-| — | Dashboard web | Pendente | — |
+| SIM-07 | Dashboard web: visão ao vivo, alertas e histórico | Implementação inicial; testado com API falsa | [SIM-07](docs/sim-07-dashboard.md) |
 | — | Escalabilidade | Pendente | — |
 | SIM-10.1 | Mosquitto e IoT Gateway em Compose com SQLite persistente | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
 | SIM-10.2 | Dataset Replayer e Backend REST no Compose | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
 | SIM-11 | Vibração (`vibration_rms`) e rotação (`rpm`) em todo o pipeline | Concluída; capabilities 50 e 51 criadas na UFMA | [SIM-11](docs/sim-11-vibracao-rpm.md) |
-| — | Containerização do Dashboard e implantação em nuvem | Pendente | — |
+| — | Implantação em nuvem | Pendente | — |
 
 ## Estrutura do repositório
 
@@ -54,7 +54,8 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | `dataset-replayer/` | Replayer em C: leitura do CSV, normalização, JSON e publicação MQTT |
 | `iot-gateway/` | Gateway em C: assinatura MQTT, validação e envio ao InterSCity |
 | `iot-gateway/scripts/register-interscity-machines.sh` | Cadastro idempotente das máquinas no InterSCity |
-| `backend/` | Backend REST em C: `/api/health`, `/api/machines`, `/api/machines/latest` e histórico por máquina; testes e `smoke-real` |
+| `backend/` | Backend REST em C: `/api/health`, `/api/machines`, `/api/machines/latest` e histórico por máquina; serve o dashboard com `--web-root`; testes e `smoke-real` |
+| `dashboard/` | Dashboard web sem frameworks nem CDN; `dashboard/tests/fake_api.py` simula a API a partir do CSV |
 | `config/mosquitto/mosquitto.conf` | Broker de desenvolvimento (somente `127.0.0.1`) |
 | `config/interscity/machines.conf` | Mapeamento `machine_id` → UUID dos recursos no InterSCity |
 | `docs/` | Validações e decisões de cada etapa |

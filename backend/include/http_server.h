@@ -21,9 +21,12 @@ struct HttpRequest {
 typedef int (*HttpRouteFn)(void *cls, const HttpRequest *req, char *body,
                            size_t body_size, unsigned int *status);
 
-/* Sobe o servidor HTTP em `bind_addr` (IPv4, ex.: "127.0.0.1") na porta indicada. */
+/* Sobe o servidor HTTP em `bind_addr` (IPv4, ex.: "127.0.0.1") na porta indicada.
+ * `web_root` (opcional, NULL desliga) é a pasta do dashboard: GET e HEAD fora de
+ * /api/ entregam arquivos dela (SIM-07). Rotas /api/ seguem para `route`. */
 int http_server_start(HttpServer **out, const char *bind_addr, uint16_t port,
-                      HttpRouteFn route, void *cls, char *error, size_t error_size);
+                      const char *web_root, HttpRouteFn route, void *cls,
+                      char *error, size_t error_size);
 
 /* Encerra o servidor e libera a memória. Aceita NULL. */
 void http_server_stop(HttpServer *server);
