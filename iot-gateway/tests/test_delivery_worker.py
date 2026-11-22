@@ -323,6 +323,68 @@ def recovery_tests(root, mapping, port):
     print('PASS rollback: falha SQLite após consulta é fatal; sem cursor/remoção/recuperação falsos', flush=True)
 
 
+def restart_outage_test(root, mapping, port):
+    """SIM-09.5: persist five samples while offline, restart, then recover.
+
+    No test INSERT/UPDATE/DELETE: every row and transition comes from the real
+    Gateway. The same file (including inode) survives both process lifetimes.
+    """
+    database = root / 'final-restart-outage.db'
+    available = threading.Event()
+    available.set()
+    with http_server(lambda *_: (201 if available.is_set() else 0, None),
+                     lambda *_: (200, None, {'resources': []}) if available.is_set()
+                     else (503, None, {})) as (url, posts, queries, _):
+        with start_gateway(root, 'final-before', mapping, database, port, url) as (p, out, err, diag):
+            first_pid = p.pid
+            available.clear()
+            for minute in range(5):
+                send(port, minute)
+            wait_for(p, lambda: len(rows(database)) == 5 and len(queries()) >= 1 and
+                     'reconciliação indisponível' in err.read_text(), diag)
+            assert len(posts()) == 1 and posts()[0][3] == 0 and cursor(database) == []
+            assert out.read_text().count('persistida (ts ') == 5
+            snapshot = rows(database)
+            assert [r['status'] for r in snapshot] == ['inflight'] + ['pending'] * 4
+            assert [r['attempt_count'] for r in snapshot] == [1, 0, 0, 0, 0]
+            for minute, row in enumerate(snapshot):
+                timestamp = f'2024-01-01T00:{minute:02d}:00'
+                assert row['machine_id'] == 1 and row['uuid'] == UUID_OK and row['timestamp'] == timestamp
+                assert json.loads(row['payload_json']) == expected_body(timestamp)
+            stop_gateway(p, out, err)
+            assert rows(database) == snapshot and cursor(database) == []
+            assert '5 persistidas' in out.read_text() and '0 entregues' in out.read_text()
+        identity = (database.stat().st_dev, database.stat().st_ino)
+        query_count = len(queries())
+        print('EVIDÊNCIA antes do reinício: 5 persistidas; estados=[inflight,pending,pending,pending,pending]; '
+              'attempt_count=[1,0,0,0,0]; cursor vazio; SIGTERM=0.', flush=True)
+        with start_gateway(root, 'final-after', mapping, database, port, url) as (p, out, err, diag):
+            assert p.pid != first_pid
+            assert (database.stat().st_dev, database.stat().st_ino) == identity
+            assert rows(database) == snapshot and cursor(database) == []
+            wait_for(p, lambda: len(queries()) > query_count and 'reconciliação indisponível' in err.read_text(), diag)
+            assert rows(database) == snapshot and len(posts()) == 1
+            available.set()
+            wait_for(p, lambda: len(posts()) == 6 and not rows(database), diag)
+            successful_queries = [q for q in queries() if q[3] == 200]
+            failed_queries = [q for q in queries() if q[3] == 503]
+            assert len(successful_queries) == 2 and len(failed_queries) >= 2
+            assert successful_queries[1][2] - successful_queries[0][2] >= 1.95
+            assert successful_queries[-1][2] < posts()[1][2]
+            assert [post[3] for post in posts()] == [0] + [201] * 5
+            assert [post[1] for post in posts()] == [expected_body()] + [
+                expected_body(f'2024-01-01T00:{minute:02d}:00') for minute in range(5)]
+            assert cursor(database) == [(1, '2024-01-01T00:04:00')]
+            stop_gateway(p, out, err)
+            assert '5 entregues' in out.read_text() and '0 recuperadas pelo Data Collector' in out.read_text()
+            assert '0 persistidas' in out.read_text()  # All deliveries came from the previous run.
+            assert rows(database) == []
+            print(f'EVIDÊNCIA após reinício: 5 entregues HTTP 201; 0 pendentes/inflight/blocked; '
+                  f'POSTs={len(posts())} (1 ambíguo + 5 confirmados); consultas={len(queries())} '
+                  f'({len(failed_queries)} HTTP 503 + 2 ausências); cursor=2024-01-01T00:04:00; SIGTERM=0.', flush=True)
+    print('PASS SIM-09.5: indisponibilidade → persistência → reinício com o mesmo SQLite → restauração → fila vazia', flush=True)
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix='sim09-worker-') as directory:
         root = Path(directory)
@@ -476,6 +538,7 @@ def main():
                     assert 'SQLite confirmado' not in out.read_text() and '0 entregues' in out.read_text()
             print('PASS H: falha de confirmação reverte cursor/delete, preserva inflight e encerra com erro', flush=True)
             recovery_tests(root, mapping, port)
+            restart_outage_test(root, mapping, port)
         for suffix in ('*-wal', '*-shm'):
             assert not list(root.glob(suffix)), list(root.glob(suffix))
     print('Todos os testes do worker HTTP passaram.', flush=True)

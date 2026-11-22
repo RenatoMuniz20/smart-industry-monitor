@@ -1,5 +1,7 @@
 # SIM-09 — Fila durável e recuperação automática
 
+Validação integrada e proposta de encerramento: [SIM-09.5](sim-09-validacao-final.md).
+
 ## Escopo e execução
 
 O modo opcional `--queue-db` desacopla recepção e HTTP:
@@ -85,7 +87,7 @@ make -C iot-gateway test-e2e
 git diff --check
 ```
 
-Resultados desta execução:
+Resultados da rodada SIM-09.4 (histórico; a rodada final está no documento SIM-09.5):
 
 | Validação | Resultado |
 | --- | --- |
@@ -96,7 +98,8 @@ Resultados desta execução:
 | ASan + UBSan, detect_leaks=1 | Worker/reconciliação e persistência MQTT passaram sem diagnósticos |
 | git diff --check | Sem problemas de whitespace |
 
-Nenhuma suíte solicitada ficou em SKIP. Os testes HTTP utilizaram somente
+Na rodada SIM-09.4, nenhuma suíte então solicitada ficou em SKIP.
+A SIM-09.5 registra separadamente os testes adicionais e suas limitações de ambiente. Os testes HTTP utilizaram somente
 servidores falsos locais. O README detalha os módulos, interfaces e a execução
 isolada dos testes.
 
@@ -131,3 +134,24 @@ limites de DNS/TCP síncrono, timeout HTTP, busy timeout SQLite e logs síncrono
 A URL de reinício deve corresponder ao InterSCity dos UUIDs persistidos. Apenas
 um Gateway/worker deve consumir o arquivo. Não há limpeza automática de blocked,
 idempotency keys, múltiplos workers ou alterações no protocolo MQTT.
+
+
+## Garantias operacionais e implantação futura
+
+A fila protege registros cujo COMMIT SQLite foi concluído, sujeito à durabilidade
+do armazenamento. Não garante retenção de publicações feitas com o Gateway
+fora do ar: a sessão MQTT é limpa e mensagens durante a desconexão podem ser
+perdidas. O ACK MQTT não integra uma transação com o SQLite.
+
+Não existe limite de capacidade configurável nem política automática de descarte.
+O crescimento da fila depende de espaço em disco; erros SQLite são fatais e
+precisam de diagnóstico. Registros blocked ficam preservados para intervenção,
+sem mecanismo automático de desbloqueio. SQLite tem função de fila temporária,
+não de repositório histórico substituto do InterSCity.
+
+Na futura containerização, `--queue-db` deverá apontar a um diretório em volume
+persistente local adequado ao WAL, com permissões para banco, `-wal` e `-shm`.
+O diretório precisa existir e sobreviver a reinícios/recriações do contêiner.
+O endpoint InterSCity e o broker devem ser acessíveis pela rede do contêiner.
+Procedimento, ressalvas do TAP e pendências reais estão no documento SIM-09.5;
+nenhum Dockerfile ou Compose foi implementado nesta etapa.
