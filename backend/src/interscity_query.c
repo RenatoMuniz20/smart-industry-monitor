@@ -261,6 +261,12 @@ int interscity_query_last(const char *base_url, long timeout_ms,
     if (http_post_json(url, body, timeout_ms, &resp, &status, error, error_size) != 0) {
         goto cleanup;
     }
+    /* O Collector responde 404 quando nenhum dos recursos tem dados ainda:
+     * não é falha, é "sem dados" (mesmo tratamento do histórico). */
+    if (status == 404 && resp.data != NULL && strstr(resp.data, "Resource not found") != NULL) {
+        rc = 0;
+        goto cleanup;
+    }
     if (status != 200) {
         fail(error, error_size, "InterSCity respondeu HTTP %ld", status);
         goto cleanup;

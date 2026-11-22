@@ -69,6 +69,15 @@ class FakeInterscity(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+class EmptyInterscity(FakeInterscity):
+    """Collector antes do primeiro envio: 404 Resource not found."""
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)
+        self._reply(404, '{"error":"Resource not found"}')
+
+
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -176,6 +185,26 @@ def main():
             print("PASS: POST em /latest -> 405; rota inexistente -> 404")
         finally:
             stop(proc)
+
+        # Cenário 1b: nenhuma máquina tem dados ainda (Collector responde 404).
+        empty = ThreadingHTTPServer(("127.0.0.1", 0), EmptyInterscity)
+        threading.Thread(target=empty.serve_forever, daemon=True).start()
+        port_empty = free_port()
+        proc_empty = start_backend(binary, port_empty, machines,
+                                   f"http://127.0.0.1:{empty.server_address[1]}")
+        try:
+            base_empty = f"http://127.0.0.1:{port_empty}"
+            wait_ready(base_empty + "/api/health", proc_empty)
+            status, body = request(base_empty + "/api/machines/latest")
+            assert status == 200, (status, body)
+            data = json.loads(body)["machines"]
+            assert [m["machine_id"] for m in data] == [1, 2, 3], data
+            assert all(m["operating_state"] is None and m["rpm"] is None for m in data), data
+            print("PASS: Collector 404 'Resource not found' -> 200 com todas as máquinas sem dados")
+        finally:
+            stop(proc_empty)
+            empty.shutdown()
+            empty.server_close()
 
         # Cenário 2: InterSCity fora do ar.
         port2 = free_port()

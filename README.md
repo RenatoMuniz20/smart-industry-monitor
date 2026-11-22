@@ -40,6 +40,7 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | SIM-08 | Tolerância a falhas no Gateway: reconexão MQTT, deduplicação e consulta antes do reenvio | Concluída | [SIM-08](docs/sim-08-tolerancia-falhas.md) |
 | SIM-09 | Fila durável SQLite e worker HTTP com reconciliação | Concluída | [Fila durável](docs/sim-09-fila-duravel.md), [Validação final](docs/sim-09-validacao-final.md) |
 | SIM-07 | Dashboard web: visão ao vivo, alertas e histórico | Implementação inicial; testado com API falsa | [SIM-07](docs/sim-07-dashboard.md) |
+| — | InterSCity falso para demonstração e testes de carga (sem escrever na UFMA) | Implementação inicial; Compose pendente de validação | [InterSCity falso](docs/interscity-falso.md) |
 | — | Escalabilidade | Pendente | — |
 | SIM-10.1 | Mosquitto e IoT Gateway em Compose com SQLite persistente | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
 | SIM-10.2 | Dataset Replayer e Backend REST no Compose | Implementação inicial | [Containerização](docs/sim-10-containerizacao.md) |
@@ -55,6 +56,7 @@ Data Collector) e consultas idempotentes separadas de escritas.
 | `iot-gateway/` | Gateway em C: assinatura MQTT, validação e envio ao InterSCity |
 | `iot-gateway/scripts/register-interscity-machines.sh` | Cadastro idempotente das máquinas no InterSCity |
 | `backend/` | Backend REST em C: `/api/health`, `/api/machines`, `/api/machines/latest` e histórico por máquina; serve o dashboard com `--web-root`; testes e `smoke-real` |
+| `tools/interscity-fake/` | InterSCity falso (Adaptor + Collector) e `scripts/fake-stack.sh` para subir o pipeline com ele |
 | `dashboard/` | Dashboard web sem frameworks nem CDN; `dashboard/tests/fake_api.py` simula a API a partir do CSV |
 | `config/mosquitto/mosquitto.conf` | Broker de desenvolvimento (somente `127.0.0.1`) |
 | `config/interscity/machines.conf` | Mapeamento `machine_id` → UUID dos recursos no InterSCity |

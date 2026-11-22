@@ -50,6 +50,7 @@ typedef struct {
 
 /* POST {base_url}/collector/resources/data/last com {"uuids":[...]}.
  * Preenche out[0..*out_count) na ordem da resposta.
+ * 404 "Resource not found" (nenhum recurso com dados) é sucesso com *out_count = 0.
  * Retorna 0 em sucesso; -1 em erro, com a mensagem em `error`. */
 int interscity_query_last(const char *base_url, long timeout_ms,
                           const char *const *uuids, size_t uuid_count,
