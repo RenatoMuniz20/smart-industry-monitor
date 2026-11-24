@@ -1,0 +1,25 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/tools/interscity-fake'
+python3 -B tests/test_fake_interscity.py
+PASS: Collector sem dados -> 404 Resource not found (como a instância real)
+PASS: envio do gateway (6 capabilities) -> 201 {}
+PASS: data/last no formato que o gateway lê (uuid, capabilities, date ...000Z)
+PASS: data/last traz a amostra mais recente; aceita data com espaço ou T
+PASS: vários uuids: só os que têm dados aparecem (o backend completa com null)
+PASS: histórico com início e fim inclusivos, em ordem; envio repetido grava cópia
+PASS: janela sem amostras -> capabilities vazio; recurso sem dados -> 404
+PASS: filtro de capabilities e rota /{uuid}/data/last
+PASS: uuid fora do machines.conf: 201 e descarte silencioso (como a instância real)
+PASS: 7 corpos inválidos -> 400 (o gateway bloqueia, não repete)
+PASS: data como texto JSON também é aceito (tolerância da instância real)
+PASS: consulta sem lista de uuids -> 400; rota desconhecida -> 404
+PASS: estatísticas contam envios, descartes, erros e amostras
+PASS: /__fake/down -> 503 (o gateway reagenda); /__fake/up volta ao normal
+PASS: SIGTERM encerra com código 0
+PASS: dados persistem no arquivo SQLite após reiniciar
+PASS: /__fake/reset apaga amostras e zera estatísticas
+PASS: --fail-rate 1 -> todo envio recebe 503
+PASS: --store-delay-ms: 201 antes de a amostra aparecer no Collector
+PASS: --latency-ms atrasa; --max-inflight 1 recusa as simultâneas com 503
+PASS: machines.conf inválido ou opção fora da faixa impedem a inicialização
+Todos os 21 testes do InterSCity falso passaram.
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/tools/interscity-fake'

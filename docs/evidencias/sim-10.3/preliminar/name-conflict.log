@@ -1,0 +1,24 @@
+A boot healthy, runtime URLs checked; current SUBACK confirmed
+Traceback (most recent call last):
+  File "/tmp/sim103_validate.py", line 147, in <module>
+    if __name__=='__main__':main()
+                            ~~~~^^
+  File "/tmp/sim103_validate.py", line 111, in main
+    replay('A');wait(lambda:len(q('SELECT id FROM telemetry_queue;'))==0);stored('A')
+    ~~~~~~^^^^^
+  File "/tmp/sim103_validate.py", line 68, in replay
+    dc('run','-d','--no-deps','--name',name,'replayer')
+    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/sim103_validate.py", line 10, in dc
+    def dc(*args):return run(base+extra+list(args)).stdout
+                         ~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/sim103_validate.py", line 7, in run
+    if check and p.returncode: raise RuntimeError(f'{args}: {p.stderr} {p.stdout}')
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: ['docker', 'compose', '-p', 'sim103-validation', '-f', 'docker-compose.yml', '-f', 'docker-compose.fake.yml', '-f', '/tmp/sim103-a-volumes.yml', 'run', '-d', '--no-deps', '--name', 'sim103-validation-replay-a', 'replayer']: time="2026-11-24T17:33:50-03:00" level=warning msg="Found orphan containers (sim103-validation-replay-a) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+time="2026-11-24T17:33:50-03:00" level=warning msg="volume \"sim103-validation_fake_interscity_data\" carries the compose label \"fake_interscity_data\" but does not match the compose file (using \"sim103-validation_a_fake_interscity_data\"); it is left untouched — remove it manually if it is no longer needed"
+time="2026-11-24T17:33:50-03:00" level=warning msg="volume \"sim103-validation_gateway_data\" carries the compose label \"gateway_data\" but does not match the compose file (using \"sim103-validation_a_gateway_data\"); it is left untouched — remove it manually if it is no longer needed"
+ Container sim103-validation-replay-a Creating 
+ Container sim103-validation-replay-a Error response from daemon: Conflict. The container name "/sim103-validation-replay-a" is already in use by container "4d2b52d71f2e51ad3cf82ca4eff8303c4997c990191779f2475aa5ed6deae17c". You have to remove (or rename) that container to be able to reuse that name. 
+Error response from daemon: Conflict. The container name "/sim103-validation-replay-a" is already in use by container "4d2b52d71f2e51ad3cf82ca4eff8303c4997c990191779f2475aa5ed6deae17c". You have to remove (or rename) that container to be able to reuse that name.
+ 

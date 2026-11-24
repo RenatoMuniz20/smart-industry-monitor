@@ -1,0 +1,15 @@
+PROC_OBSERVED /proc/9291/cmdline b'/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/scripts/../build/dataset-replayer\x00/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/scripts/../../data/predictive_maintenance_v3.csv\x00--machine-id\x0012\x00--publish\x00--limit\x0010\x00--interval-ms\x001000\x00--mqtt-host\x00127.0.0.1\x00--mqtt-port\x0048817\x00'
+PROC_OBSERVED /proc/9292/cmdline b'bash\x00/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/scripts/run-ten-machines.sh\x00'
+  File "<frozen runpy>", line 294, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "tests/test_mqtt_integration.py", line 400, in <module>
+    real_broker()
+    ~~~~~~~~~~~^^
+  File "tests/test_mqtt_integration.py", line 377, in real_broker
+    ten_machines(root, port)
+    ~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_ten_machines.py", line 131, in ten_machines
+    assert args[args.index(b'--interval-ms') + 1] == b'1000'
+                ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ValueError: list.index(x): x not in list

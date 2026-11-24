@@ -1,0 +1,39 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'
+gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic  -Wl,--wrap=nanosleep -o build/test_replayer_timing src/main.c src/csv_reader.c src/telemetry.c tests/wrap_nanosleep.c build/telemetry_json.o build/mqtt_publisher.o -lmosquitto 
+python3 -B tests/test_mqtt_integration.py
+Teste MQTT concluído.
+PASS: dez máquinas com broker indisponível
+Teste MQTT concluído.
+PASS: ack
+Teste MQTT concluído.
+PASS: reject
+Teste MQTT concluído.
+PASS: silent-connack
+Teste MQTT concluído.
+PASS: silent-puback
+Teste MQTT concluído.
+PASS: wrong-ack
+Teste MQTT concluído.
+PASS: disconnect
+PASS: falha após PUBACK parcial, sem sucesso nem reconexão
+PASS: temporização intervalo=60000, modo=None, esperas=0
+PASS: temporização intervalo=100, modo=None, esperas=2
+PASS: temporização intervalo=None, modo=None, esperas=2
+PASS: temporização intervalo=100, modo=eintr, esperas=3
+PASS: temporização intervalo=100, modo=fail, esperas=1
+Teste MQTT concluído.
+PASS: CSV → Telemetry → JSON → MQTT, filtros, limites e erros
+PASS: dez processos simultâneos, IDs, tipos, tópicos e limites
+Traceback (most recent call last):
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_mqtt_integration.py", line 400, in <module>
+    real_broker()
+    ~~~~~~~~~~~^^
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_mqtt_integration.py", line 377, in real_broker
+    ten_machines(root, port)
+    ~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_ten_machines.py", line 131, in ten_machines
+    assert args[args.index(b'--interval-ms') + 1] == b'1000'
+                ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ValueError: list.index(x): x not in list
+make: *** [Makefile:41: test-mqtt] Error 1
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'

@@ -1,0 +1,4 @@
+{
+  "status": 200,
+  "body": "{\"adaptor_requests\": 0, \"adaptor_created\": 0, \"adaptor_bad_request\": 0, \"adaptor_unknown_uuid\": 0, \"adaptor_injected_503\": 0, \"adaptor_overload_503\": 0, \"down_503\": 6, \"samples_received\": 0, \"collector_requests\": 0, \"collector_not_found\": 0, \"created_per_second_10s\": 0.0, \"inflight\": 0, \"inflight_peak\": 1, \"uptime_s\": 16.1, \"samples_stored\": 0, \"down\": true, \"resources\": 10, \"config\": {\"latency_ms\": 0.0, \"jitter_ms\": 0.0, \"store_delay_ms\": 0.0, \"fail_rate\": 0.0, \"max_inflight\": 0}}"
+}

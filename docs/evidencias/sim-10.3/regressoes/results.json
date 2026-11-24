@@ -1,0 +1,30 @@
+[
+  {
+    "command": "make -C tools/interscity-fake test",
+    "exit": 0
+  },
+  {
+    "command": "make -C dataset-replayer test",
+    "exit": 0
+  },
+  {
+    "command": "make -C dataset-replayer test-mqtt",
+    "exit": 2
+  },
+  {
+    "command": "make -C iot-gateway test",
+    "exit": 0
+  },
+  {
+    "command": "make -C iot-gateway test-mqtt",
+    "exit": 0
+  },
+  {
+    "command": "make -C iot-gateway test-e2e",
+    "exit": 0
+  },
+  {
+    "command": "make -C backend test",
+    "exit": 0
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "command": "make -C dataset-replayer test",
+    "run": "test-local",
+    "exit": 0,
+    "result": "PASS",
+    "elapsed_s": 0.632,
+    "skip": [
+      "SKIP: locale num\u00e9rico alternativo indispon\u00edvel."
+    ]
+  },
+  {
+    "command": "make -C dataset-replayer test-mqtt",
+    "run": "mqtt-1",
+    "exit": 0,
+    "result": "PASS",
+    "elapsed_s": 18.623,
+    "skip": []
+  },
+  {
+    "command": "make -C dataset-replayer test-mqtt",
+    "run": "mqtt-2",
+    "exit": 0,
+    "result": "PASS",
+    "elapsed_s": 18.646,
+    "skip": []
+  },
+  {
+    "command": "make -C dataset-replayer test-mqtt",
+    "run": "mqtt-3",
+    "exit": 0,
+    "result": "PASS",
+    "elapsed_s": 18.633,
+    "skip": []
+  },
+  {
+    "command": "make -C dataset-replayer test-mqtt",
+    "run": "mqtt-4",
+    "exit": 0,
+    "result": "PASS",
+    "elapsed_s": 18.66,
+    "skip": []
+  }
+]

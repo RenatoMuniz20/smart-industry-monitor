@@ -1,0 +1,33 @@
+Fila SQLite habilitada (10 máquinas mapeadas; worker HTTP independente).
+Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
+Worker HTTP: id=1 HTTP 503; pending; nova tentativa em 1000 ms.
+Worker HTTP: id=1 machine_id=1 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=2 machine_id=2 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=3 machine_id=3 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=4 machine_id=6 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=5 machine_id=7 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=6 machine_id=8 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=7 machine_id=9 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=8 machine_id=11 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=9 machine_id=13 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=10 machine_id=12 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=11 machine_id=1 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=12 machine_id=2 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=13 machine_id=3 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=14 machine_id=6 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=15 machine_id=7 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=16 machine_id=8 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=17 machine_id=9 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=18 machine_id=11 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=19 machine_id=13 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=20 machine_id=12 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=21 machine_id=1 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=22 machine_id=2 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=23 machine_id=3 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=24 machine_id=6 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=25 machine_id=7 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=26 machine_id=8 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=27 machine_id=9 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=28 machine_id=11 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=29 machine_id=13 entregue (HTTP 201; SQLite confirmado).
+Worker HTTP: id=30 machine_id=12 entregue (HTTP 201; SQLite confirmado).
