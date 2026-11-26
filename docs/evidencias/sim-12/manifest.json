@@ -1,0 +1,22 @@
+{
+  "backend_poll_target_s": 5,
+  "branch": "main",
+  "compose_version": "5.6.1",
+  "cpus": 12,
+  "dataset_sha256": "8c9277131a596133d78a3945a57b52038b3582dfa516e0ec20b70a0a8165aade",
+  "docker_version": "29.9.2",
+  "expected_measurements": 3522,
+  "expected_telemetries": 600,
+  "finished_utc": "2026-11-26T20:58:45.106304+00:00",
+  "head": "e424b253d8dbe10613b55f648307d89e0b1c07ed",
+  "kernel": "7.2.11-arch1-1",
+  "memory_bytes": 16678076416,
+  "preexisting_running_container_ids_preserved": true,
+  "preexisting_running_containers": 5,
+  "project_prefix": "sim12-20261126t205424",
+  "queue_interval_target_s": 1,
+  "resumed_utc": "2026-11-26T20:57:02.633296+00:00",
+  "runner_sha256": "61653960f0ad2040ee3fccf4fe17ee6433ea0c6e82f49ad936bb2c36e29f2a25",
+  "started_utc": "2026-11-26T20:54:24.658725+00:00",
+  "success": true
+}

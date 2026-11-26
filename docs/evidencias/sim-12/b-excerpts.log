@@ -1,0 +1,16 @@
+gateway-1  | Gateway pronto: smart-industry/machines/+/telemetry (QoS 1).
+gateway-1  | Worker HTTP: 600 entregues, 0 retentativas, 0 bloqueadas, 0 recuperadas pelo Data Collector.
+gateway-1  | Fila SQLite: 600 persistidas, 0 duplicatas ignoradas, 0 sem mapeamento, 0 não preparadas.
+gateway-1  | Gateway encerrado por solicitação.
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Publicações confirmadas: 60
+replayer-1  | Dez máquinas concluídas com sucesso.
+backend-1  | encerrando backend...

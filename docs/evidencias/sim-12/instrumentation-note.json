@@ -1,0 +1,9 @@
+{
+  "excluded_pilot_project": "sim12-20261126t205124-a",
+  "excluded_reason": "Docker stats emitted ANSI sequences; incomplete CPU/memory measurements; not used in final comparison.",
+  "pilot_adaptor_created": 600,
+  "pilot_measurements_stored": 3522,
+  "pilot_cleanup": "Own project down without -v; volumes retained.",
+  "valid_run_resume": "A completed successfully. Before B, port preflight found port unavailable. Distinct host ports were assigned; B/C resumed with fresh volumes and identical application images. No repeat of successful A.",
+  "application_changes": false
+}

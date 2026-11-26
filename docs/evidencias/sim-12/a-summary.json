@@ -1,0 +1,190 @@
+{
+  "backend_poll_http_codes": {
+    "200": 12
+  },
+  "blocked_max_observed": 0,
+  "deliver_mean_per_s": 9.902,
+  "docker_replayer_finished_at": "2026-11-26T20:55:35.283463329Z",
+  "docker_replayer_started_at": "2026-11-26T20:54:36.165066566Z",
+  "duplicate_measurements": 0,
+  "exits": {
+    "backend": {
+      "exit_code": 0,
+      "restarts": 0
+    },
+    "gateway": {
+      "exit_code": 0,
+      "restarts": 0
+    },
+    "interscity-fake": {
+      "exit_code": 0,
+      "restarts": 0
+    },
+    "mosquitto": {
+      "exit_code": 0,
+      "restarts": 0
+    },
+    "replayer": {
+      "exit_code": 0,
+      "restarts": 0
+    }
+  },
+  "fake_final_stats": {
+    "adaptor_bad_request": 0,
+    "adaptor_created": 600,
+    "adaptor_injected_503": 0,
+    "adaptor_overload_503": 0,
+    "adaptor_requests": 600,
+    "adaptor_unknown_uuid": 0,
+    "collector_not_found": 0,
+    "collector_requests": 12,
+    "config": {
+      "fail_rate": 0.0,
+      "jitter_ms": 0.0,
+      "latency_ms": 60.0,
+      "max_inflight": 0,
+      "store_delay_ms": 0.0
+    },
+    "created_per_second_10s": 9.7,
+    "down": false,
+    "down_503": 0,
+    "inflight": 0,
+    "inflight_peak": 2,
+    "resources": 10,
+    "samples_received": 3522,
+    "samples_stored": 3522,
+    "uptime_s": 69.5
+  },
+  "final_cursors": {
+    "1": "2024-01-01T16:00:00",
+    "11": "2024-01-01T16:47:00",
+    "12": "2024-01-01T15:53:00",
+    "13": "2024-01-01T15:20:00",
+    "2": "2024-01-01T18:04:00",
+    "3": "2024-01-01T16:06:00",
+    "6": "2024-01-01T15:58:00",
+    "7": "2024-01-01T15:44:00",
+    "8": "2024-01-01T13:43:00",
+    "9": "2024-01-01T16:04:00"
+  },
+  "final_queue": {
+    "blocked": 0,
+    "inflight": 0,
+    "pending": 0,
+    "total": 0
+  },
+  "gateway_events": {
+    "Erro MQTT": 0,
+    "Erro SQLite": 0,
+    "Telemetria inválida": 0,
+    "blocked (": 0,
+    "duplicata ignorada": 0,
+    "erro fatal": 0,
+    "nova tentativa": 0,
+    "não persistida": 0,
+    "reconciliação indisponível": 0,
+    "resultado ambíguo": 0,
+    "sem UUID": 0
+  },
+  "gateway_http_delivered": 600,
+  "gateway_persisted": 600,
+  "gateway_received": 600,
+  "http_accepted": 600,
+  "image_ids": {
+    "backend": "sha256:62de9aa258f4a48e8b134ad9649637176f87ddddbe539ebf650357aa46ec3f55",
+    "gateway": "sha256:efcbf5c86668629d89b1c19a47a20a1e2842d2f90cb2796448dd6efff11d1a18",
+    "interscity-fake": "sha256:5839d8ccf8010f8930d6edcd4870178a6636510827611dcc811554981781bf8c",
+    "mosquitto": "sha256:fa12172a051310efe5bcb7a6a11b77bd5faacb82cbacd7742aa758bf024fd8e4",
+    "replayer": "sha256:307beb31a53089161d2ad8cd62bba64fe5e530dbe2d6703a59bfcf97f13e78f0"
+  },
+  "initial": {
+    "cursors": 0,
+    "fake": {
+      "adaptor_bad_request": 0,
+      "adaptor_created": 0,
+      "adaptor_injected_503": 0,
+      "adaptor_overload_503": 0,
+      "adaptor_requests": 0,
+      "adaptor_unknown_uuid": 0,
+      "collector_not_found": 0,
+      "collector_requests": 0,
+      "config": {
+        "fail_rate": 0.0,
+        "jitter_ms": 0.0,
+        "latency_ms": 60.0,
+        "max_inflight": 0,
+        "store_delay_ms": 0.0
+      },
+      "created_per_second_10s": 0.0,
+      "down": false,
+      "down_503": 0,
+      "inflight": 0,
+      "inflight_peak": 0,
+      "resources": 10,
+      "samples_received": 0,
+      "samples_stored": 0,
+      "uptime_s": 8.6
+    },
+    "queue": {
+      "blocked": 0,
+      "inflight": 0,
+      "pending": 0,
+      "total": 0
+    }
+  },
+  "interval_ms": 1000,
+  "measurements_by_capability": {
+    "sim_current": 586,
+    "sim_failure_within_24h": 600,
+    "sim_motor_temperature": 578,
+    "sim_operating_state": 600,
+    "sim_rpm": 588,
+    "sim_vibration_rms": 570
+  },
+  "measurements_stored": 3522,
+  "mqtt_confirmed": 600,
+  "pending_max_observed": 10,
+  "project": "sim12-20261126t205424-a",
+  "publish_mean_per_s": 10.149,
+  "queue_max_observed": 10,
+  "queue_samples": 57,
+  "replay_duration_observed_s": 59.533,
+  "replay_runtime_docker_s": 59.118,
+  "resources": {
+    "backend": {
+      "cpu_max_percent": 2.59,
+      "cpu_mean_percent": 0.48,
+      "memory_max_mib": 4.051,
+      "samples": 117
+    },
+    "gateway": {
+      "cpu_max_percent": 5.42,
+      "cpu_mean_percent": 4.757,
+      "memory_max_mib": 10.92,
+      "samples": 117
+    },
+    "interscity-fake": {
+      "cpu_max_percent": 30.22,
+      "cpu_mean_percent": 6.076,
+      "memory_max_mib": 25.8,
+      "samples": 117
+    },
+    "mosquitto": {
+      "cpu_max_percent": 2.19,
+      "cpu_mean_percent": 0.439,
+      "memory_max_mib": 10.91,
+      "samples": 117
+    },
+    "replayer": {
+      "cpu_max_percent": 0.06,
+      "cpu_mean_percent": 0.045,
+      "memory_max_mib": 11.99,
+      "samples": 117
+    }
+  },
+  "scenario": "A",
+  "stored_content_sha256": "074054286dc00a472d35d21d1ad2fcebc9043fab889c2c54f847bc49cf793ec5",
+  "success": true,
+  "telemetry_samples_stored": 600,
+  "total_drain_observed_s": 60.593
+}
