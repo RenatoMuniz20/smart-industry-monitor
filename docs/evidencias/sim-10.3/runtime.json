@@ -1,0 +1,666 @@
+{
+  "A-inspect": {
+    "gateway": {
+      "id": "530d15c3957c5299e50fe59a1a2d5dd241e4b079440b9948fa49d48f01b097d6",
+      "cmd": [
+        "--host",
+        "mosquitto",
+        "--port",
+        "1883",
+        "--client-id",
+        "smart-industry-gateway",
+        "--interscity-url",
+        "http://interscity-fake:8000",
+        "--interscity-timeout-ms",
+        "5000",
+        "--interscity-map",
+        "/etc/smart-industry/machines.conf",
+        "--queue-db",
+        "/data/telemetry.db"
+      ],
+      "entrypoint": [
+        "/usr/local/bin/iot-gateway"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 13224,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:33:45.304019691Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "sim103-validation_a_gateway_data",
+          "Source": "/var/lib/docker/volumes/sim103-validation_a_gateway_data/_data",
+          "Destination": "/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "Destination": "/etc/smart-industry/machines.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    },
+    "backend": {
+      "id": "b7ae5b63fa6d284e91001c10bfebe2b949a9f7f9278d0cbf04ef6e9b794b2f49",
+      "cmd": [
+        "--bind",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--machines",
+        "/etc/smart-industry/machines.conf",
+        "--interscity-url",
+        "http://interscity-fake:8000",
+        "--interscity-timeout-ms",
+        "5000",
+        "--web-root",
+        "/srv/dashboard"
+      ],
+      "entrypoint": [
+        "/usr/local/bin/backend"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 13102,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:33:43.80520426Z",
+        "FinishedAt": "0001-01-01T00:00:00Z",
+        "Health": {
+          "Status": "healthy",
+          "FailingStreak": 0,
+          "Log": [
+            {
+              "Start": "2026-11-24T17:33:48.805752168-03:00",
+              "End": "2026-11-24T17:33:48.863359478-03:00",
+              "ExitCode": 0,
+              "Output": "{\"status\":\"ok\"}"
+            },
+            {
+              "Start": "2026-11-24T17:33:53.864755965-03:00",
+              "End": "2026-11-24T17:33:53.928808657-03:00",
+              "ExitCode": 0,
+              "Output": "{\"status\":\"ok\"}"
+            },
+            {
+              "Start": "2026-11-24T17:33:58.930337991-03:00",
+              "End": "2026-11-24T17:33:58.989500888-03:00",
+              "ExitCode": 0,
+              "Output": "{\"status\":\"ok\"}"
+            },
+            {
+              "Start": "2026-11-24T17:34:03.990331145-03:00",
+              "End": "2026-11-24T17:34:04.04912266-03:00",
+              "ExitCode": 0,
+              "Output": "{\"status\":\"ok\"}"
+            }
+          ]
+        }
+      },
+      "mounts": [
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dashboard",
+          "Destination": "/srv/dashboard",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "Destination": "/etc/smart-industry/machines.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    },
+    "mosquitto": {
+      "id": "1a0bc42d65fb9c3a35004055b03afeccc801ee1ec52329b7ede3704c8e296ac1",
+      "cmd": [
+        "/usr/sbin/mosquitto",
+        "-c",
+        "/mosquitto/config/mosquitto.conf"
+      ],
+      "entrypoint": [
+        "/docker-entrypoint.sh"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 12934,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:33:39.928856238Z",
+        "FinishedAt": "0001-01-01T00:00:00Z",
+        "Health": {
+          "Status": "healthy",
+          "FailingStreak": 0,
+          "Log": [
+            {
+              "Start": "2026-11-24T17:33:44.928977007-03:00",
+              "End": "2026-11-24T17:33:44.988417778-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:33:49.989101979-03:00",
+              "End": "2026-11-24T17:33:50.043848839-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:33:55.044805429-03:00",
+              "End": "2026-11-24T17:33:55.100568471-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:34:00.1018844-03:00",
+              "End": "2026-11-24T17:34:00.155927555-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:34:05.156964579-03:00",
+              "End": "2026-11-24T17:34:05.210546258-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            }
+          ]
+        }
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "5e166136c25113c3af6b3cc559d6ce54bee9f366de9ee20066909204a9f3e47d",
+          "Source": "/var/lib/docker/volumes/5e166136c25113c3af6b3cc559d6ce54bee9f366de9ee20066909204a9f3e47d/_data",
+          "Destination": "/mosquitto/data",
+          "Driver": "local",
+          "Mode": "",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "volume",
+          "Name": "9c38fa8364493a67c53cd52393ec8004225f3d4d5d1ed5977d470b46d23ea102",
+          "Source": "/var/lib/docker/volumes/9c38fa8364493a67c53cd52393ec8004225f3d4d5d1ed5977d470b46d23ea102/_data",
+          "Destination": "/mosquitto/log",
+          "Driver": "local",
+          "Mode": "",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/mosquitto/mosquitto-docker.conf",
+          "Destination": "/mosquitto/config/mosquitto.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    },
+    "interscity-fake": {
+      "id": "c15b5bd60c10edd481e2bad2169e04aca912ae450cdc7f21de3ecebade5fcc83",
+      "cmd": null,
+      "entrypoint": [
+        "python3",
+        "-I",
+        "/app/fake_interscity.py"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 13004,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:33:40.094435794Z",
+        "FinishedAt": "0001-01-01T00:00:00Z",
+        "Health": {
+          "Status": "healthy",
+          "FailingStreak": 0,
+          "Log": [
+            {
+              "Start": "2026-11-24T17:33:43.095191715-03:00",
+              "End": "2026-11-24T17:33:43.672755063-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:33:48.674102455-03:00",
+              "End": "2026-11-24T17:33:49.345746674-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:33:54.346527367-03:00",
+              "End": "2026-11-24T17:33:54.913923572-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:33:59.91544226-03:00",
+              "End": "2026-11-24T17:34:00.518643399-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:34:05.519697793-03:00",
+              "End": "2026-11-24T17:34:06.122632614-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            }
+          ]
+        }
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "sim103-validation_a_fake_interscity_data",
+          "Source": "/var/lib/docker/volumes/sim103-validation_a_fake_interscity_data/_data",
+          "Destination": "/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "Destination": "/etc/smart-industry/machines.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    }
+  },
+  "B-inspect": {
+    "gateway": {
+      "id": "4c7e2e3e7040a0db7b4070384c2535d4176a4d94c382e01ff6aea56540012325",
+      "cmd": [
+        "--host",
+        "mosquitto",
+        "--port",
+        "1883",
+        "--client-id",
+        "smart-industry-gateway",
+        "--interscity-url",
+        "http://interscity-fake:8000",
+        "--interscity-timeout-ms",
+        "5000",
+        "--interscity-map",
+        "/etc/smart-industry/machines.conf",
+        "--queue-db",
+        "/data/telemetry.db"
+      ],
+      "entrypoint": [
+        "/usr/local/bin/iot-gateway"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 16141,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:34:37.299878382Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "sim103-validation_b_gateway_data",
+          "Source": "/var/lib/docker/volumes/sim103-validation_b_gateway_data/_data",
+          "Destination": "/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "Destination": "/etc/smart-industry/machines.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    },
+    "backend": {
+      "id": "d950b0f482209cebf1505e316fa4ae9cb3405243ace2c884c02994d1ed5e866d",
+      "cmd": [
+        "--bind",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--machines",
+        "/etc/smart-industry/machines.conf",
+        "--interscity-url",
+        "http://interscity-fake:8000",
+        "--interscity-timeout-ms",
+        "5000",
+        "--web-root",
+        "/srv/dashboard"
+      ],
+      "entrypoint": [
+        "/usr/local/bin/backend"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 16020,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:34:35.801466247Z",
+        "FinishedAt": "0001-01-01T00:00:00Z",
+        "Health": {
+          "Status": "healthy",
+          "FailingStreak": 0,
+          "Log": [
+            {
+              "Start": "2026-11-24T17:34:40.802047409-03:00",
+              "End": "2026-11-24T17:34:40.858205067-03:00",
+              "ExitCode": 0,
+              "Output": "{\"status\":\"ok\"}"
+            }
+          ]
+        }
+      },
+      "mounts": [
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dashboard",
+          "Destination": "/srv/dashboard",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "Destination": "/etc/smart-industry/machines.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    },
+    "mosquitto": {
+      "id": "1de27b12e15c05ac9bd43695fb99b4e9739a63e8b812df6ccaf008cc35d6ca2d",
+      "cmd": [
+        "/usr/sbin/mosquitto",
+        "-c",
+        "/mosquitto/config/mosquitto.conf"
+      ],
+      "entrypoint": [
+        "/docker-entrypoint.sh"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 15840,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:34:31.921263271Z",
+        "FinishedAt": "0001-01-01T00:00:00Z",
+        "Health": {
+          "Status": "healthy",
+          "FailingStreak": 0,
+          "Log": [
+            {
+              "Start": "2026-11-24T17:34:36.922193701-03:00",
+              "End": "2026-11-24T17:34:36.979576449-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            }
+          ]
+        }
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "5d23d55406c7e6e054fd0b315ba8d90e0bb29b817f580c4ddb00acc3caf557b3",
+          "Source": "/var/lib/docker/volumes/5d23d55406c7e6e054fd0b315ba8d90e0bb29b817f580c4ddb00acc3caf557b3/_data",
+          "Destination": "/mosquitto/data",
+          "Driver": "local",
+          "Mode": "",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "volume",
+          "Name": "aad8d5d33af063025c1622ad13e7cf45e12ca58195690ca2350c55896a6fefcb",
+          "Source": "/var/lib/docker/volumes/aad8d5d33af063025c1622ad13e7cf45e12ca58195690ca2350c55896a6fefcb/_data",
+          "Destination": "/mosquitto/log",
+          "Driver": "local",
+          "Mode": "",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/mosquitto/mosquitto-docker.conf",
+          "Destination": "/mosquitto/config/mosquitto.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    },
+    "interscity-fake": {
+      "id": "12a2697b0285add0792c8f538495c4e31c5da05b87bcddcaa8d7e5d674d53368",
+      "cmd": null,
+      "entrypoint": [
+        "python3",
+        "-I",
+        "/app/fake_interscity.py"
+      ],
+      "state": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 15912,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-24T20:34:32.094619577Z",
+        "FinishedAt": "0001-01-01T00:00:00Z",
+        "Health": {
+          "Status": "healthy",
+          "FailingStreak": 0,
+          "Log": [
+            {
+              "Start": "2026-11-24T17:34:35.094981307-03:00",
+              "End": "2026-11-24T17:34:35.65536298-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            },
+            {
+              "Start": "2026-11-24T17:34:40.656641818-03:00",
+              "End": "2026-11-24T17:34:41.321037286-03:00",
+              "ExitCode": 0,
+              "Output": ""
+            }
+          ]
+        }
+      },
+      "mounts": [
+        {
+          "Type": "volume",
+          "Name": "sim103-validation_b_fake_interscity_data",
+          "Source": "/var/lib/docker/volumes/sim103-validation_b_fake_interscity_data/_data",
+          "Destination": "/data",
+          "Driver": "local",
+          "Mode": "rw",
+          "RW": true,
+          "Propagation": ""
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "Destination": "/etc/smart-industry/machines.conf",
+          "Mode": "ro",
+          "RW": false,
+          "Propagation": "rprivate"
+        }
+      ],
+      "project": "sim103-validation"
+    }
+  },
+  "C-stopped": {
+    "id": "4c7e2e3e7040a0db7b4070384c2535d4176a4d94c382e01ff6aea56540012325",
+    "cmd": [
+      "--host",
+      "mosquitto",
+      "--port",
+      "1883",
+      "--client-id",
+      "smart-industry-gateway",
+      "--interscity-url",
+      "http://interscity-fake:8000",
+      "--interscity-timeout-ms",
+      "5000",
+      "--interscity-map",
+      "/etc/smart-industry/machines.conf",
+      "--queue-db",
+      "/data/telemetry.db"
+    ],
+    "state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-11-24T20:34:37.299878382Z",
+      "FinishedAt": "2026-11-24T20:34:47.216588605Z"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "sim103-validation_b_gateway_data",
+        "Source": "/var/lib/docker/volumes/sim103-validation_b_gateway_data/_data",
+        "Destination": "/data",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+        "Destination": "/etc/smart-industry/machines.conf",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ]
+  },
+  "C-recreated": {
+    "id": "a75cd0d55dd188a115cab0312eb7d1722f71d6a345b7a232d376213113cd4f3a",
+    "cmd": [
+      "--host",
+      "mosquitto",
+      "--port",
+      "1883",
+      "--client-id",
+      "smart-industry-gateway",
+      "--interscity-url",
+      "http://interscity-fake:8000",
+      "--interscity-timeout-ms",
+      "5000",
+      "--interscity-map",
+      "/etc/smart-industry/machines.conf",
+      "--queue-db",
+      "/data/telemetry.db"
+    ],
+    "state": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 17617,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-11-24T20:34:47.903271299Z",
+      "FinishedAt": "0001-01-01T00:00:00Z"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "sim103-validation_b_gateway_data",
+        "Source": "/var/lib/docker/volumes/sim103-validation_b_gateway_data/_data",
+        "Destination": "/data",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+        "Destination": "/etc/smart-industry/machines.conf",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ]
+  }
+}

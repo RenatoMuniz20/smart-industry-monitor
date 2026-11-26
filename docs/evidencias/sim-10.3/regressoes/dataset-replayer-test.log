@@ -1,0 +1,19 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'
+gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic  -o build/test_telemetry tests/test_telemetry.c src/telemetry.c 
+gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic  -o build/test_telemetry_json tests/test_telemetry_json.c src/telemetry_json.c src/telemetry.c 
+gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic -c -o build/telemetry_json.o src/telemetry_json.c
+gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic  -o build/dataset-replayer src/main.c src/csv_reader.c src/telemetry.c build/telemetry_json.o build/mqtt_publisher.o -lmosquitto 
+./build/test_csv_reader
+Todos os testes de csv_reader passaram.
+./build/test_telemetry
+Todos os testes de telemetry passaram.
+./build/test_telemetry_json
+SKIP: locale numérico alternativo indisponível.
+Todos os testes de telemetry_json passaram.
+sh tests/test_cli.sh
+Todos os testes da CLI passaram.
+./build/test_mqtt_publisher
+Todos os testes locais de mqtt_publisher passaram.
+python3 tests/test_ten_machines.py
+Todos os testes locais do launcher passaram.
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'

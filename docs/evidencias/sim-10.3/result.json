@@ -1,0 +1,8 @@
+{
+  "result": "PASS",
+  "A": 30,
+  "B_persisted": 30,
+  "C_recovered": 30,
+  "UFMA_accessed": false,
+  "volumes_preserved": true
+}

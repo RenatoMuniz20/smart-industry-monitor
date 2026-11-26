@@ -1,0 +1,12 @@
+PID                 COMMAND
+16823               /usr/bin/bash /app/dataset-replayer/scripts/run-ten-machines.sh
+16866               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 1 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16867               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 2 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16868               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 3 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16869               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 6 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16870               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 7 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16871               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 8 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16872               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 9 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16876               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 11 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16877               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 12 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883
+16879               /app/dataset-replayer/scripts/../build/dataset-replayer /app/data/predictive_maintenance_v3.csv --machine-id 13 --publish --limit 3 --interval-ms 1000 --mqtt-host mosquitto --mqtt-port 1883

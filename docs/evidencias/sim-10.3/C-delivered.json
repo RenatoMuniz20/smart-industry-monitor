@@ -1,0 +1,55 @@
+{
+  "rows": [],
+  "cursors": [
+    {
+      "machine_id": 1,
+      "last_timestamp": "2024-01-01T00:21:00"
+    },
+    {
+      "machine_id": 2,
+      "last_timestamp": "2024-01-01T00:43:00"
+    },
+    {
+      "machine_id": 3,
+      "last_timestamp": "2024-01-01T00:25:00"
+    },
+    {
+      "machine_id": 6,
+      "last_timestamp": "2024-01-01T00:26:00"
+    },
+    {
+      "machine_id": 7,
+      "last_timestamp": "2024-01-01T00:28:00"
+    },
+    {
+      "machine_id": 8,
+      "last_timestamp": "2024-01-01T00:09:00"
+    },
+    {
+      "machine_id": 9,
+      "last_timestamp": "2024-01-01T00:36:00"
+    },
+    {
+      "machine_id": 11,
+      "last_timestamp": "2024-01-01T00:08:00"
+    },
+    {
+      "machine_id": 12,
+      "last_timestamp": "2024-01-01T00:18:00"
+    },
+    {
+      "machine_id": 13,
+      "last_timestamp": "2024-01-01T00:14:00"
+    }
+  ],
+  "wal": [
+    {
+      "journal_mode": "wal"
+    }
+  ],
+  "integrity": [
+    {
+      "integrity_check": "ok"
+    }
+  ]
+}

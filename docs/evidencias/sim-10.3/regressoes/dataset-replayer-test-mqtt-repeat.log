@@ -1,0 +1,37 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'
+python3 -B tests/test_mqtt_integration.py
+Teste MQTT concluído.
+PASS: dez máquinas com broker indisponível
+Teste MQTT concluído.
+PASS: ack
+Teste MQTT concluído.
+PASS: reject
+Teste MQTT concluído.
+PASS: silent-connack
+Teste MQTT concluído.
+PASS: silent-puback
+Teste MQTT concluído.
+PASS: wrong-ack
+Teste MQTT concluído.
+PASS: disconnect
+PASS: falha após PUBACK parcial, sem sucesso nem reconexão
+PASS: temporização intervalo=60000, modo=None, esperas=0
+PASS: temporização intervalo=100, modo=None, esperas=2
+PASS: temporização intervalo=None, modo=None, esperas=2
+PASS: temporização intervalo=100, modo=eintr, esperas=3
+PASS: temporização intervalo=100, modo=fail, esperas=1
+Teste MQTT concluído.
+PASS: CSV → Telemetry → JSON → MQTT, filtros, limites e erros
+Traceback (most recent call last):
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_mqtt_integration.py", line 400, in <module>
+    real_broker()
+    ~~~~~~~~~~~^^
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_mqtt_integration.py", line 377, in real_broker
+    ten_machines(root, port)
+    ~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer/tests/test_ten_machines.py", line 90, in ten_machines
+    assert b'--publish' in args
+           ^^^^^^^^^^^^^^^^^^^^
+AssertionError
+make: *** [Makefile:41: test-mqtt] Error 1
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'

@@ -1,0 +1,13 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway'
+make -C ../dataset-replayer all
+make[1]: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dataset-replayer'
+python3 -B tests/test_end_to_end.py
+PASS: 10 produtores simultâneos, 30 publicações confirmadas, 30 telemetrias CSV processadas
+CONTAGEM POR ID: {"1": 3, "2": 3, "3": 3, "6": 3, "7": 3, "8": 3, "9": 3, "11": 3, "12": 3, "13": 3}
+EXEMPLO RECEBIDO: {"machine_id": 1, "machine_type": "CNC", "timestamp": "2024-01-01 00:00:00", "temperature": 49.51, "current": 5.1, "power": null, "vibration_rms": 0.81, "rpm": 860.9, "state": "IDLE", "failure_within_24h": 0}
+CONTINUIDADE: Telemetria inválida: Esperadas exatamente as dez propriedades obrigatórias (payload=2 bytes).
+PASS: válida/inválida/válida; 32 válidas no total; SIGTERM=0; filhos coletados
+Validação integrada SIM-04.4 concluída; broker e arquivos temporários removidos.
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway'

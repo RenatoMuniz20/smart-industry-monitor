@@ -1,0 +1,244 @@
+{
+  "name": "sim103-validation",
+  "networks": {
+    "default": {
+      "name": "sim103-validation_default",
+      "ipam": {}
+    }
+  },
+  "services": {
+    "backend": {
+      "restart": "unless-stopped",
+      "command": [
+        "--bind",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--machines",
+        "/etc/smart-industry/machines.conf",
+        "--interscity-url",
+        "http://interscity-fake:8000",
+        "--interscity-timeout-ms",
+        "5000",
+        "--web-root",
+        "/srv/dashboard"
+      ],
+      "entrypoint": null,
+      "networks": {
+        "default": null
+      },
+      "stop_grace_period": "30s",
+      "stop_signal": "SIGTERM",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "target": "/etc/smart-industry/machines.conf",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/dashboard",
+          "target": "/srv/dashboard",
+          "read_only": true,
+          "bind": {}
+        }
+      ],
+      "build": {
+        "context": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/backend",
+        "dockerfile": "Dockerfile"
+      },
+      "depends_on": {
+        "interscity-fake": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "--fail",
+          "--silent",
+          "--show-error",
+          "http://127.0.0.1:8080/api/health"
+        ],
+        "timeout": "3s",
+        "interval": "5s",
+        "retries": 5,
+        "start_period": "5s"
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 8080,
+          "published": "18080",
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "gateway": {
+      "restart": "unless-stopped",
+      "command": [
+        "--host",
+        "mosquitto",
+        "--port",
+        "1883",
+        "--client-id",
+        "smart-industry-gateway",
+        "--interscity-url",
+        "http://interscity-fake:8000",
+        "--interscity-timeout-ms",
+        "5000",
+        "--interscity-map",
+        "/etc/smart-industry/machines.conf",
+        "--queue-db",
+        "/data/telemetry.db"
+      ],
+      "entrypoint": null,
+      "networks": {
+        "default": null
+      },
+      "stop_grace_period": "30s",
+      "stop_signal": "SIGTERM",
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "gateway_data",
+          "target": "/data",
+          "volume": {}
+        },
+        {
+          "type": "bind",
+          "source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "target": "/etc/smart-industry/machines.conf",
+          "read_only": true,
+          "bind": {}
+        }
+      ],
+      "build": {
+        "context": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway",
+        "dockerfile": "Dockerfile"
+      },
+      "depends_on": {
+        "interscity-fake": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "mosquitto": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      }
+    },
+    "interscity-fake": {
+      "restart": "unless-stopped",
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "FAKE_DB": "/data/interscity-fake.db",
+        "FAKE_FAIL_RATE": "0",
+        "FAKE_HOST": "0.0.0.0",
+        "FAKE_JITTER_MS": "0",
+        "FAKE_LATENCY_MS": "0",
+        "FAKE_MAX_INFLIGHT": "0",
+        "FAKE_PORT": "8000",
+        "FAKE_RESOURCES": "/etc/smart-industry/machines.conf",
+        "FAKE_STORE_DELAY_MS": "0"
+      },
+      "networks": {
+        "default": null
+      },
+      "stop_grace_period": "10s",
+      "stop_signal": "SIGTERM",
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "fake_interscity_data",
+          "target": "/data",
+          "volume": {}
+        },
+        {
+          "type": "bind",
+          "source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/interscity/machines.conf",
+          "target": "/etc/smart-industry/machines.conf",
+          "read_only": true,
+          "bind": {}
+        }
+      ],
+      "build": {
+        "context": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/tools/interscity-fake",
+        "dockerfile": "Dockerfile"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/__fake/health', timeout=2)"
+        ],
+        "timeout": "3s",
+        "interval": "5s",
+        "retries": 5,
+        "start_period": "3s"
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 8000,
+          "published": "18000",
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "mosquitto": {
+      "restart": "unless-stopped",
+      "command": null,
+      "entrypoint": null,
+      "image": "eclipse-mosquitto:2",
+      "networks": {
+        "default": null
+      },
+      "user": "1883:1883",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/config/mosquitto/mosquitto-docker.conf",
+          "target": "/mosquitto/config/mosquitto.conf",
+          "read_only": true,
+          "bind": {}
+        }
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "mosquitto_pub",
+          "-h",
+          "127.0.0.1",
+          "-p",
+          "1883",
+          "-t",
+          "smart-industry/health",
+          "-n",
+          "-q",
+          "1"
+        ],
+        "timeout": "3s",
+        "interval": "5s",
+        "retries": 5,
+        "start_period": "5s"
+      }
+    }
+  },
+  "volumes": {
+    "fake_interscity_data": {
+      "name": "sim103-validation_a_fake_interscity_data"
+    },
+    "gateway_data": {
+      "name": "sim103-validation_a_gateway_data"
+    }
+  }
+}

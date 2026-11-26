@@ -1,0 +1,12 @@
+A boot healthy, runtime URLs checked; current SUBACK confirmed
+Traceback (most recent call last):
+  File "/tmp/sim103_validate.py", line 147, in <module>
+    if __name__=='__main__':main()
+                            ~~~~^^
+  File "/tmp/sim103_validate.py", line 111, in main
+    replay('A');wait(lambda:len(q('SELECT id FROM telemetry_queue;'))==0);stored('A')
+    ~~~~~~^^^^^
+  File "/tmp/sim103_validate.py", line 75, in replay
+    save(label+'-processes.txt',top);assert seen,'10 simultaneous C processes not observed'
+                                            ^^^^
+AssertionError: 10 simultaneous C processes not observed

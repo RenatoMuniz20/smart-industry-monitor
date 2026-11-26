@@ -10,6 +10,7 @@ import subprocess
 import time
 
 SCRIPT = Path('scripts/run-ten-machines.sh').resolve()
+REPLAYER = (SCRIPT.parent.parent / 'build/dataset-replayer').resolve()
 IDS = {1, 2, 3, 6, 7, 8, 9, 11, 12, 13}
 
 
@@ -84,9 +85,10 @@ def ten_machines(root, port):
                     stdout=out, stderr=err)
                 pids = wait_for_children(launcher, errors)
                 assert len(set(pids.values())) == 10
+                arguments = wait_for_replayers(launcher, pids, errors)
                 # Evidence of ten simultaneous independent real C processes.
                 for machine, pid in pids.items():
-                    args = Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
+                    args = arguments[pid]
                     assert b'--publish' in args
                     assert args[args.index(b'--machine-id') + 1] == str(machine).encode()
                     assert args[args.index(b'--interval-ms') + 1] == b'500'
@@ -126,8 +128,9 @@ def ten_machines(root, port):
                                         stdout=out, stderr=err)
             try:
                 pids = wait_for_children(launcher, errors)
+                arguments = wait_for_replayers(launcher, pids, errors)
                 for pid in pids.values():
-                    args = Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
+                    args = arguments[pid]
                     assert args[args.index(b'--interval-ms') + 1] == b'1000'
                     assert args[args.index(b'--limit') + 1] == b'10'
                 if mode == 'child-failure':
@@ -149,9 +152,49 @@ def wait_for_children(process, errors):
     deadline = time.monotonic() + 10
     while True:
         pids = launched(errors.read_text())
+        assert process.poll() is None, f'Launcher exited: {process.returncode}; {errors.read_text()}'
         if set(pids) == IDS:
             return pids
-        assert process.poll() is None and time.monotonic() < deadline, errors.read_text()
+        assert time.monotonic() < deadline, errors.read_text()
+        time.sleep(.01)
+
+
+def wait_for_replayers(process, pids, errors):
+    # The launcher's PID log can precede the child's exec: /proc may still show Bash.
+    deadline = time.monotonic() + 10
+    observed = {pid: {'args': None, 'exe': None, 'state': None} for pid in pids.values()}
+
+    def diagnostic(reason, pid):
+        return (f'{reason}; PID={pid}; observed={observed}; '
+                f'launcher={process.poll()}; log={errors.read_text()}')
+
+    while True:
+        ready = True
+        for pid in pids.values():
+            assert process.poll() is None, diagnostic('Launcher exited before readiness', pid)
+            proc = Path(f'/proc/{pid}')
+            try:
+                observed[pid]['state'] = (proc / 'stat').read_text().rsplit(')', 1)[1].split()[0]
+                observed[pid]['args'] = (proc / 'cmdline').read_bytes().split(b'\0')
+            except (FileNotFoundError, ProcessLookupError) as error:
+                raise AssertionError(diagnostic('Child disappeared before readiness', pid)) from error
+            assert observed[pid]['state'] not in ('Z', 'X'), diagnostic('Child exited before readiness', pid)
+            try:
+                executable = Path(os.readlink(proc / 'exe')).resolve()
+            except (FileNotFoundError, ProcessLookupError):
+                assert proc.exists(), diagnostic('Child disappeared before exec', pid)
+                # A live process can briefly lack an executable while exec is in progress.
+                executable = None
+            observed[pid]['exe'] = str(executable) if executable else None
+            assert executable in (None, REPLAYER) or executable.name == 'bash', diagnostic('Unexpected executable', pid)
+            args = observed[pid]['args']
+            # Readlink and cmdline are separate reads; both must reflect the exec.
+            if executable != REPLAYER or not args[0] or Path(os.fsdecode(args[0])).resolve() != REPLAYER:
+                ready = False
+        assert process.poll() is None, diagnostic('Launcher exited before readiness', pid)
+        if ready:
+            return {pid: item['args'] for pid, item in observed.items()}
+        assert time.monotonic() < deadline, diagnostic('Timed out waiting for Replayer exec', pid)
         time.sleep(.01)
 
 

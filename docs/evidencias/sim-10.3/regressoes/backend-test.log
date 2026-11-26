@@ -1,0 +1,112 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/backend'
+mkdir -p build
+gcc -std=c11 -Wall -Wextra -Wpedantic -Iinclude -I/usr/include/json-c -o build/backend src/main.c src/http_server.c src/routes.c src/machine_map.c src/interscity_query.c src/static_files.c -lmicrohttpd -lcurl -ljson-c
+mkdir -p build
+gcc -std=c11 -Wall -Wextra -Wpedantic -Iinclude -I/usr/include/json-c -o build/test_interscity_query tests/test_interscity_query.c src/interscity_query.c -lmicrohttpd -lcurl -ljson-c
+mkdir -p build
+gcc -std=c11 -Wall -Wextra -Wpedantic -Iinclude -I/usr/include/json-c -o build/test_static_files tests/test_static_files.c src/static_files.c
+python3 -B tests/test_backend.py build/backend
+PASS: GET /api/health -> 200 {status: ok}
+PASS: rota desconhecida -> 404
+PASS: POST /api/health -> 405
+PASS: por padrão o servidor escuta só em 127.0.0.1
+PASS: SIGTERM -> encerramento limpo (código 0)
+PASS: --bind inválido -> backend recusa iniciar
+test_backend: todos os testes passaram.
+python3 -B tests/test_interscity_query.py build/test_interscity_query
+PASS: resposta válida devolve 2 máquinas
+PASS: uuid da primeira máquina preservado
+PASS: sim_operating_state texto 'IDLE'
+PASS: sim_motor_temperature numérico 49.51
+PASS: timestamp copiado como veio do InterSCity
+PASS: sim_current numérico 3.2
+PASS: zero é lido como valor (failure = 0)
+PASS: capability ausente fica present = 0
+PASS: segunda máquina: estado RUNNING
+PASS: sim_vibration_rms numérico 0.81 (SIM-11)
+PASS: sim_rpm numérico 860.9; ausentes na segunda máquina (SIM-11)
+PASS: HTTP 500 vira erro com o código
+PASS: corpo inválido vira erro de JSON
+PASS: lista vazia devolve 0 máquinas sem erro
+PASS: uuid com caracteres proibidos é recusado
+PASS: conexão recusada vira falha de rede
+PASS: histórico válido sem erro
+PASS: 4 registros repetidos viram 2 timestamps
+PASS: primeiro ponto: 00:24 com 49.08
+PASS: segundo ponto: 00:43 com 42.01
+PASS: estado textual preservado no histórico
+PASS: capability ausente vira série vazia
+PASS: vibração sem repetição e em ordem (SIM-11)
+PASS: série de rpm no histórico (SIM-11)
+PASS: 404 'Resource not found' vira histórico vazio
+PASS: data fora do formato é recusada
+PASS: início posterior ao fim é recusado
+test_interscity_query: todos os testes passaram.
+PASS: corpo do /data/last = uuids das duas máquinas
+PASS: corpo do histórico = start_date e end_date em UTC
+test_interscity_query.py: todos os testes passaram.
+python3 -B tests/test_machines_latest.py build/backend
+PASS: 3 máquinas na ordem do arquivo (comentário ignorado)
+PASS: máquina 1 com texto, número, zero e timestamp corretos
+PASS: capability ausente na resposta vira null
+PASS: máquina sem dados no InterSCity vira nulls
+PASS: backend enviou os 3 uuids em um único POST
+PASS: POST em /latest -> 405; rota inexistente -> 404
+PASS: Collector 404 'Resource not found' -> 200 com todas as máquinas sem dados
+PASS: InterSCity fora do ar -> 502 com mensagem genérica
+PASS: uuid inválido no arquivo -> backend recusa iniciar
+test_machines_latest: todos os testes passaram.
+python3 -B tests/test_machines_history.py build/backend
+PASS: GET /api/machines lista o mapeamento, sem consultar o InterSCity
+PASS: histórico sem duplicatas, em ordem, com texto, número e zero
+PASS: backend pediu o período em UTC ao Data Collector
+PASS: máquina sem capabilities devolve séries vazias
+PASS: 404 'Resource not found' do Data Collector vira série vazia
+PASS: parâmetros ausentes, formato errado e início após fim -> 400
+PASS: máquina desconhecida e id inválido -> 404
+PASS: POST nas rotas de máquinas -> 405
+test_machines_history: todos os testes passaram.
+./build/test_static_files
+PASS: pasta do dashboard aceita
+PASS: tamanho de saída zero é recusado
+PASS: arquivo no lugar da pasta é recusado
+PASS: pasta inexistente é recusada
+PASS: / entrega index.html como HTML
+PASS: /index.html entregue
+PASS: JavaScript com o tipo correto
+PASS: CSS com o tipo correto
+PASS: arquivo em subpasta entregue
+PASS: arquivo vazio entregue com tamanho zero
+PASS: link para arquivo dentro da pasta é aceito
+PASS: ../ para fora da pasta: 404
+PASS: segmento .. no meio: 404
+PASS: segmento . : 404
+PASS: link para fora da pasta: 404
+PASS: arquivo oculto: 404
+PASS: extensão fora da lista: 404
+PASS: pasta sem extensão: 404
+PASS: barra no final: 404
+PASS: pasta com nome .js: 404
+PASS: arquivo inexistente: 404
+PASS: barra dupla: 404
+PASS: URL sem / inicial: 404
+PASS: caractere % : 404
+PASS: caractere de controle: 404
+PASS: extensão em maiúsculas: 404
+PASS: URL longa demais: 404
+PASS: arquivo acima do limite: 500
+PASS: sem pasta configurada: 404
+PASS: saída nula: 500
+Todos os testes de static_files passaram.
+python3 -B tests/test_dashboard_static.py build/backend
+PASS: / entrega o index.html com tipo HTML e cabeçalhos de segurança
+PASS: /app.js com tipo JavaScript
+PASS: HEAD / responde 200 sem corpo
+PASS: 7 caminhos proibidos ou inexistentes -> 404 JSON
+PASS: POST / -> 405
+PASS: /api/ continua com a API (health 200, rota inexistente 404)
+PASS: inicialização informa o endereço do dashboard
+PASS: sem --web-root nada fora de /api/ é servido (comportamento anterior)
+PASS: --web-root inexistente impede a inicialização com mensagem clara
+Todos os testes do dashboard estático passaram.
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/backend'

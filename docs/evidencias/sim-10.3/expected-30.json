@@ -1,0 +1,382 @@
+{
+  "1": [
+    {
+      "machine_id": 1,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 49.51,
+      "current": 5.1,
+      "power": null,
+      "vibration_rms": 0.81,
+      "rpm": 860.9,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 1,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:03:00",
+      "temperature": 40.58,
+      "current": 5.3,
+      "power": null,
+      "vibration_rms": 0.75,
+      "rpm": 899.6,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 1,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:21:00",
+      "temperature": 49.7,
+      "current": null,
+      "power": null,
+      "vibration_rms": 0.71,
+      "rpm": 862.7,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "2": [
+    {
+      "machine_id": 2,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 49.47,
+      "current": 4.61,
+      "power": null,
+      "vibration_rms": 0.82,
+      "rpm": 883.9,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 2,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:24:00",
+      "temperature": 49.08,
+      "current": 4.13,
+      "power": null,
+      "vibration_rms": 0.97,
+      "rpm": 907.8,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 2,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:43:00",
+      "temperature": 42.01,
+      "current": 5.21,
+      "power": null,
+      "vibration_rms": 0.94,
+      "rpm": 870.2,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "3": [
+    {
+      "machine_id": 3,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 45.71,
+      "current": null,
+      "power": null,
+      "vibration_rms": 0.78,
+      "rpm": 868.3,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 3,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:14:00",
+      "temperature": 56.96,
+      "current": 15.53,
+      "power": null,
+      "vibration_rms": 2.27,
+      "rpm": 2827.0,
+      "state": "NORMAL",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 3,
+      "machine_type": "CNC",
+      "timestamp": "2024-01-01 00:25:00",
+      "temperature": 44.96,
+      "current": 4.16,
+      "power": null,
+      "vibration_rms": 0.74,
+      "rpm": 860.4,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "6": [
+    {
+      "machine_id": 6,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 42.54,
+      "current": 3.94,
+      "power": null,
+      "vibration_rms": 0.52,
+      "rpm": 550.3,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 6,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:05:00",
+      "temperature": 41.43,
+      "current": 3.77,
+      "power": null,
+      "vibration_rms": 0.68,
+      "rpm": 518.2,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 6,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:26:00",
+      "temperature": 43.42,
+      "current": 3.51,
+      "power": null,
+      "vibration_rms": 0.62,
+      "rpm": 543.4,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "7": [
+    {
+      "machine_id": 7,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 37.47,
+      "current": 3.73,
+      "power": null,
+      "vibration_rms": 0.62,
+      "rpm": 539.0,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 7,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:25:00",
+      "temperature": 39.53,
+      "current": 3.67,
+      "power": null,
+      "vibration_rms": 0.65,
+      "rpm": 556.9,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 7,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:28:00",
+      "temperature": 67.48,
+      "current": 12.64,
+      "power": null,
+      "vibration_rms": 2.03,
+      "rpm": 1326.8,
+      "state": "NORMAL",
+      "failure_within_24h": 0
+    }
+  ],
+  "8": [
+    {
+      "machine_id": 8,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 60.64,
+      "current": 11.54,
+      "power": null,
+      "vibration_rms": null,
+      "rpm": 1204.4,
+      "state": "NORMAL",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 8,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:03:00",
+      "temperature": 37.81,
+      "current": 3.95,
+      "power": null,
+      "vibration_rms": 0.54,
+      "rpm": 561.9,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 8,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:09:00",
+      "temperature": 43.23,
+      "current": 3.9,
+      "power": null,
+      "vibration_rms": 0.59,
+      "rpm": 569.6,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "9": [
+    {
+      "machine_id": 9,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 36.42,
+      "current": 3.62,
+      "power": null,
+      "vibration_rms": 0.6,
+      "rpm": 516.8,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 9,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:09:00",
+      "temperature": 36.18,
+      "current": 3.87,
+      "power": null,
+      "vibration_rms": 0.57,
+      "rpm": 552.8,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 9,
+      "machine_type": "Pump",
+      "timestamp": "2024-01-01 00:36:00",
+      "temperature": 39.8,
+      "current": 3.75,
+      "power": null,
+      "vibration_rms": 0.59,
+      "rpm": 505.5,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "11": [
+    {
+      "machine_id": 11,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 50.14,
+      "current": 5.94,
+      "power": null,
+      "vibration_rms": 0.91,
+      "rpm": 762.8,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 11,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:02:00",
+      "temperature": 48.8,
+      "current": 6.13,
+      "power": null,
+      "vibration_rms": 0.96,
+      "rpm": 749.4,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 11,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:08:00",
+      "temperature": 50.96,
+      "current": 5.61,
+      "power": null,
+      "vibration_rms": 0.96,
+      "rpm": 744.4,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "12": [
+    {
+      "machine_id": 12,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 50.93,
+      "current": 5.58,
+      "power": null,
+      "vibration_rms": 0.96,
+      "rpm": 766.1,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 12,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:11:00",
+      "temperature": 50.09,
+      "current": 6.88,
+      "power": null,
+      "vibration_rms": 0.96,
+      "rpm": 774.8,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 12,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:18:00",
+      "temperature": 44.05,
+      "current": 5.67,
+      "power": null,
+      "vibration_rms": 0.97,
+      "rpm": 779.0,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ],
+  "13": [
+    {
+      "machine_id": 13,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:00:00",
+      "temperature": 46.1,
+      "current": 5.63,
+      "power": null,
+      "vibration_rms": 1.08,
+      "rpm": 746.3,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 13,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:11:00",
+      "temperature": 46.16,
+      "current": 5.89,
+      "power": null,
+      "vibration_rms": 1.01,
+      "rpm": 735.8,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    },
+    {
+      "machine_id": 13,
+      "machine_type": "Compressor",
+      "timestamp": "2024-01-01 00:14:00",
+      "temperature": 49.14,
+      "current": 6.74,
+      "power": null,
+      "vibration_rms": 1.07,
+      "rpm": 746.1,
+      "state": "IDLE",
+      "failure_within_24h": 0
+    }
+  ]
+}

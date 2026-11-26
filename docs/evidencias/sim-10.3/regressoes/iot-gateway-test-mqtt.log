@@ -1,0 +1,58 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway'
+python3 -B tests/test_mqtt_integration.py
+EXPECTED_ERROR
+PASS: broker indisponível
+PASS: reject, incluindo reabertura após falha
+PASS: silent-connack, incluindo reabertura após falha
+PASS: silent-suback, incluindo reabertura após falha
+PASS: wrong-mid, incluindo reabertura após falha
+PASS: qos0, incluindo reabertura após falha
+PASS: qos2, incluindo reabertura após falha
+PASS: rejected-suback, incluindo reabertura após falha
+PASS: wrong-count, incluindo reabertura após falha
+PASS: broker real, 3 mensagens, tópico/bytes/comprimento, vazio, reabertura
+PASS: desconexão detectada, contexto fechado sem reconectar
+Todos os testes de integração MQTT do Gateway passaram.
+python3 -B tests/test_cli.py --mqtt
+PASS: CLI broker indisponível
+LOG OBSERVADO: Telemetria válida: {"machine_id":1,"machine_type":"CNC","timestamp":"original sample","temperature":0.0,"current":null,"power":null,"vibration_rms":null,"rpm":0.0,"state":"PEAK","failure_within_24h":1}
+ERRO OBSERVADO: Telemetria inválida: JSON inválido, incompleto ou UTF-8 inválido (payload=18 bytes).
+PASS: CLI sigint-messages, processo coletado
+PASS: CLI sigterm, processo coletado
+PASS: CLI network-error, processo coletado
+Todos os testes de integração da CLI passaram.
+python3 -B tests/test_interscity_gateway.py --mqtt
+PASS: Gateway → InterSCity falso: 7 publicações conferidas (duplicata ignorada, timeout confirmado, timeout com reenvio único, 500, SIGTERM=0)
+CORPO ENVIADO: {"data":{"sim_motor_temperature":[{"value":49.51,"timestamp":"2024-01-01T00:00:00"}],"sim_current":[{"value":5.1,"timestamp":"2024-01-01T00:00:00"}],"sim_vibration_rms":[{"value":0.81,"timestamp":"2024-01-01T00:00:00"}],"sim_rpm":[{"value":860.9,"timestamp":"2024-01-01T00:00:00"}],"sim_operating_state":[{"value":"IDLE","timestamp":"2024-01-01T00:00:00"}],"sim_failure_within_24h":[{"value":0,"timestamp":"2024-01-01T00:00:00"}]}}
+python3 -B tests/test_durable_queue.py --mqtt
+PASS A/D: 3 pending, UUID/timestamp/payload corretos, attempt_count=0; reconciliação indisponível; nenhum POST ao Adaptor
+PASS B: duplicata pendente ignorada
+PASS E/F: JSON inválido, ID sem mapa e falha de payload descartados; válida seguinte persistida
+PASS C/D: reinicialização preserva fila/deduplicação; nova amostra sem InterSCity disponível
+PASS: duplicata confirmada; falha SQLite fatal sem falso sucesso, sem POST durante falha de consulta
+Todos os testes MQTT da fila durável passaram.
+python3 -B tests/test_delivery_worker.py
+PASS A: 3 POSTs FIFO/payload/UUID, fila vazia, cursor e deduplicação confirmada
+PASS B: 503/429 preservam pending, backoff 1/2s e reset após entrega
+PASS C: HTTP 400 bloqueado e preservado; próxima mensagem entregue
+PASS D/F: MQTT persiste durante HTTP lento; timeout mantém inflight sem reenvio
+PASS E: reinicialização consulta Collector indisponível; sem POST; MQTT continua
+PASS G: SIGTERM durante 201, timeout e backoff; join e estados consistentes
+PASS H: falha de confirmação reverte cursor/delete, preserva inflight e encerra com erro
+PASS recuperação A: timeout armazenado, 1 consulta, sem POST duplicado; fila prossegue
+PASS recuperação B (missing): duas consultas espaçadas, tentativa 2, HTTP 201 remove
+PASS recuperação B (older): duas consultas espaçadas, tentativa 2, HTTP 201 remove
+EVIDÊNCIA indisponibilidade: PID=6972 mantido; 5 registros persistidos durante falha; 3 consultas HTTP 503; recuperação com 5 entregas e fila vazia.
+PASS recuperação C: perda real de conexão, backoff e retomada automática sem reiniciar
+PASS recuperação D: reinício preserva inflight/tentativa; consulta antes de qualquer novo POST
+PASS recuperação E: timestamp posterior não confirma; reenvio explícito com risco de duplicação
+PASS recuperação F: consultas 503 mantêm inflight e MQTT; recuperação automática sem reenvio do confirmado
+PASS recuperação G: 10 respostas malformadas/incompatíveis preservam inflight, sem reenvio; recuperação posterior
+PASS consistência: falha entre ausências reinicia evidência; confirmação posterior evita POST
+PASS recuperação H: SIGTERM durante consulta lenta, timeout/join sem deadlock, inflight preservado
+PASS rollback: falha SQLite após consulta é fatal; sem cursor/remoção/recuperação falsos
+EVIDÊNCIA antes do reinício: 5 persistidas; estados=[inflight,pending,pending,pending,pending]; attempt_count=[1,0,0,0,0]; cursor vazio; SIGTERM=0.
+EVIDÊNCIA após reinício: 5 entregues HTTP 201; 0 pendentes/inflight/blocked; POSTs=6 (1 ambíguo + 5 confirmados); consultas=4 (2 HTTP 503 + 2 ausências); cursor=2024-01-01T00:04:00; SIGTERM=0.
+PASS SIM-09.5: indisponibilidade → persistência → reinício com o mesmo SQLite → restauração → fila vazia
+Todos os testes do worker HTTP passaram.
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway'

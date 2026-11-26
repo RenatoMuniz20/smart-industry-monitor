@@ -1,0 +1,706 @@
+ Image sim103-validation-interscity-fake Building 
+ Image sim103-validation-gateway Building 
+ Image sim103-validation-backend Building 
+ Image sim103-validation-replayer Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 2.36kB done
+#1 DONE 0.0s
+
+#2 [replayer internal] load build definition from Dockerfile
+#2 transferring dockerfile: 895B done
+#2 DONE 0.1s
+
+#3 [backend internal] load build definition from Dockerfile
+#3 transferring dockerfile: 650B done
+#3 DONE 0.1s
+
+#4 [gateway internal] load build definition from Dockerfile
+#4 transferring dockerfile: 815B done
+#4 DONE 0.1s
+
+#5 [backend internal] load metadata for docker.io/library/archlinux:base
+#5 ...
+
+#6 [interscity-fake internal] load build definition from Dockerfile
+#6 transferring dockerfile: 408B done
+#6 DONE 0.1s
+
+#5 [gateway internal] load metadata for docker.io/library/archlinux:base
+#5 DONE 3.5s
+
+#7 [interscity-fake internal] load metadata for docker.io/library/python:3.12-alpine
+#7 DONE 3.6s
+
+#8 [gateway internal] load .dockerignore
+#8 transferring context: 100B done
+#8 DONE 0.1s
+
+#9 [gateway internal] load build context
+#9 DONE 0.0s
+
+#10 [replayer internal] load .dockerignore
+#10 transferring context: 139B done
+#10 DONE 0.1s
+
+#11 [replayer internal] load build context
+#11 DONE 0.0s
+
+#12 [backend internal] load .dockerignore
+#12 transferring context: 100B done
+#12 DONE 0.1s
+
+#13 [backend internal] load build context
+#13 DONE 0.0s
+
+#14 [interscity-fake internal] load .dockerignore
+#14 transferring context: 2B done
+#14 DONE 0.1s
+
+#15 [backend dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 resolve docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 resolve docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d 0.0s done
+#15 DONE 0.1s
+
+#16 [interscity-fake 1/3] FROM docker.io/library/python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+#16 resolve docker.io/library/python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89 0.1s done
+#16 DONE 0.2s
+
+#13 [backend internal] load build context
+#13 transferring context: 54.75kB done
+#13 DONE 0.1s
+
+#9 [gateway internal] load build context
+#9 transferring context: 133.35kB done
+#9 DONE 0.2s
+
+#17 [interscity-fake internal] load build context
+#17 transferring context: 20.02kB done
+#17 DONE 0.2s
+
+#11 [replayer internal] load build context
+#11 transferring context: 36.85kB done
+#11 DONE 0.2s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 sha256:0b31e1de0029782ca04a2508095d5bf1d79fc9edf5176beddf73fd8e95cb2eb7 0B / 8.71kB 0.3s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 0B / 134.45MB 0.2s
+#15 sha256:0b31e1de0029782ca04a2508095d5bf1d79fc9edf5176beddf73fd8e95cb2eb7 8.71kB / 8.71kB 0.3s done
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 6.29MB / 134.45MB 5.3s
+#15 ...
+
+#16 [interscity-fake 1/3] FROM docker.io/library/python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+#16 sha256:cc36311dc778ba4d60f5286dc5de96f657c8f9ac4a0bd62ce0f9606aae0d4418 248B / 248B 0.2s done
+#16 sha256:113b91713f05dfc8999a7dd895088c7afb068e656eb1c802fab15c92d3e5c4e1 4.19MB / 13.78MB 9.9s
+#16 sha256:aa121b1b1cdb977b7ae6ba67331cfbf474c3d8060e5d90c833a9abdf86370a60 411.99kB / 411.99kB 2.8s done
+#16 sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 2.10MB / 3.85MB 9.8s
+#16 ...
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 12.58MB / 134.45MB 10.4s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 19.92MB / 134.45MB 15.2s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 27.26MB / 134.45MB 20.1s
+#15 ...
+
+#16 [interscity-fake 1/3] FROM docker.io/library/python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+#16 sha256:113b91713f05dfc8999a7dd895088c7afb068e656eb1c802fab15c92d3e5c4e1 10.49MB / 13.78MB 20.1s
+#16 sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 3.85MB / 3.85MB 12.2s done
+#16 extracting sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 0.2s done
+#16 extracting sha256:aa121b1b1cdb977b7ae6ba67331cfbf474c3d8060e5d90c833a9abdf86370a60 0.2s done
+#16 ...
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 33.55MB / 134.45MB 25.2s
+#15 ...
+
+#16 [interscity-fake 1/3] FROM docker.io/library/python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+#16 sha256:113b91713f05dfc8999a7dd895088c7afb068e656eb1c802fab15c92d3e5c4e1 13.78MB / 13.78MB 24.8s done
+#16 extracting sha256:113b91713f05dfc8999a7dd895088c7afb068e656eb1c802fab15c92d3e5c4e1 0.5s done
+#16 DONE 25.6s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 ...
+
+#16 [interscity-fake 1/3] FROM docker.io/library/python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
+#16 extracting sha256:cc36311dc778ba4d60f5286dc5de96f657c8f9ac4a0bd62ce0f9606aae0d4418 0.0s done
+#16 DONE 25.6s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 ...
+
+#18 [interscity-fake 2/3] RUN addgroup -g 10001 fake     && adduser -D -H -u 10001 -G fake fake     && mkdir /data && chown 10001:10001 /data
+#18 DONE 0.9s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 ...
+
+#19 [interscity-fake 3/3] COPY fake_interscity.py /app/fake_interscity.py
+#19 DONE 0.1s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 ...
+
+#20 [interscity-fake] exporting to image
+#20 exporting layers 0.1s done
+#20 exporting manifest sha256:54f5fe174e0ebdb683209b434a19fab916544c291275e3db8ea35e36c8145c4e 0.0s done
+#20 exporting config sha256:369050cbc9b4c34bf0bb2820483f24af50eb28e5ad8d8ce594a2170728421c5c done
+#20 exporting attestation manifest sha256:affc852263387c319af7f4fbd71c519958141304a202f8ba3fce97c1afa82a4e 0.0s done
+#20 exporting manifest list sha256:8ca31eabd1af8b448ef44cfd8f99db1d9fcdd7b3883a5b4882d232757fae6626 0.0s done
+#20 naming to docker.io/library/sim103-validation-interscity-fake:latest done
+#20 unpacking to docker.io/library/sim103-validation-interscity-fake:latest 0.8s done
+#20 DONE 1.0s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 ...
+
+#21 [interscity-fake] resolving provenance for metadata file
+#21 DONE 0.0s
+
+#15 [replayer dependencies 1/2] FROM docker.io/library/archlinux:base@sha256:375a401bb3c6376b37f40b6dfa25067db37ec78d0b7af67ae6315f43a0184a9d
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 40.89MB / 134.45MB 29.0s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 48.23MB / 134.45MB 32.9s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 55.57MB / 134.45MB 37.2s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 62.91MB / 134.45MB 41.4s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 70.25MB / 134.45MB 45.0s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 77.59MB / 134.45MB 48.5s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 84.93MB / 134.45MB 51.6s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 92.27MB / 134.45MB 54.6s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 99.61MB / 134.45MB 58.1s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 106.95MB / 134.45MB 61.1s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 114.29MB / 134.45MB 65.0s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 121.63MB / 134.45MB 68.0s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 128.97MB / 134.45MB 71.0s
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 134.45MB / 134.45MB 73.8s done
+#15 sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 134.45MB / 134.45MB 73.8s done
+#15 extracting sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50
+#15 extracting sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 5.6s done
+#15 extracting sha256:3a05bbf5bc1be154e0b91d649e7c115c53fc0cd4f733fa398569471b3ffdbd50 5.6s done
+#15 extracting sha256:0b31e1de0029782ca04a2508095d5bf1d79fc9edf5176beddf73fd8e95cb2eb7 0.0s done
+#15 DONE 79.6s
+
+#22 [replayer dependencies 2/3] RUN pacman -Syu --noconfirm --needed bash mosquitto     && pacman -Scc --noconfirm
+#22 0.442 :: Synchronizing package databases...
+#22 ...
+
+#23 [backend dependencies 2/2] RUN pacman -Syu --noconfirm --needed libmicrohttpd curl json-c ca-certificates     && pacman -Scc --noconfirm
+#23 0.430 :: Synchronizing package databases...
+#23 ...
+
+#24 [gateway dependencies 2/2] RUN pacman -Syu --noconfirm --needed ca-certificates json-c mosquitto curl sqlite     && pacman -Scc --noconfirm
+#24 0.453 :: Synchronizing package databases...
+#24 26.60  core downloading...
+#24 26.60  extra downloading...
+#24 26.62 warning: ca-certificates-20240618-1 is up to date -- skipping
+#24 26.62 warning: json-c-0.19-1 is up to date -- skipping
+#24 26.85 warning: curl-8.23.0-2 is up to date -- skipping
+#24 26.85 warning: sqlite-3.54.1-1 is up to date -- skipping
+#24 26.85 :: Starting full system upgrade...
+#24 26.85 resolving dependencies...
+#24 26.86 looking for conflicting packages...
+#24 26.86 
+#24 26.86 Package (7)      Old Version  New Version  Net Change  Download Size
+#24 26.86 
+#24 26.86 extra/c-ares                  1.34.9-1       0.54 MiB       0.24 MiB
+#24 26.86 extra/cjson                   1.7.19-1       0.09 MiB       0.03 MiB
+#24 26.86 core/cryptsetup  2.8.8-2      2.8.9-1        0.14 MiB       0.87 MiB
+#24 26.86 core/gpgme       2.2.0-1      2.3.1-1        0.00 MiB       0.32 MiB
+#24 26.86 core/kmod        34.3-2       34.4-1         0.00 MiB       0.13 MiB
+#24 26.86 core/libseccomp  2.6.0-1      2.6.2-1        0.00 MiB       0.10 MiB
+#24 26.86 extra/mosquitto               2.1.2-3        1.83 MiB       0.53 MiB
+#24 26.86 
+#24 26.86 Total Download Size:   2.21 MiB
+#24 26.86 Total Installed Size:  7.64 MiB
+#24 26.86 Net Upgrade Size:      2.60 MiB
+#24 26.86 
+#24 26.86 :: Proceed with installation? [Y/n] 
+#24 26.86 :: Retrieving packages...
+#24 ...
+
+#23 [backend dependencies 2/2] RUN pacman -Syu --noconfirm --needed libmicrohttpd curl json-c ca-certificates     && pacman -Scc --noconfirm
+#23 27.12  core downloading...
+#23 27.12  extra downloading...
+#23 27.14 warning: curl-8.23.0-2 is up to date -- skipping
+#23 27.14 warning: json-c-0.19-1 is up to date -- skipping
+#23 27.14 warning: ca-certificates-20240618-1 is up to date -- skipping
+#23 27.14 :: Starting full system upgrade...
+#23 27.38 resolving dependencies...
+#23 27.38 looking for conflicting packages...
+#23 27.38 
+#23 27.38 Package (5)         Old Version  New Version  Net Change  Download Size
+#23 27.38 
+#23 27.38 core/cryptsetup     2.8.8-2      2.8.9-1        0.14 MiB       0.87 MiB
+#23 27.38 core/gpgme          2.2.0-1      2.3.1-1        0.00 MiB       0.32 MiB
+#23 27.38 core/kmod           34.3-2       34.4-1         0.00 MiB       0.13 MiB
+#23 27.38 core/libseccomp     2.6.0-1      2.6.2-1        0.00 MiB       0.10 MiB
+#23 27.38 core/libmicrohttpd               1.0.11-1       0.62 MiB       0.29 MiB
+#23 27.38 
+#23 27.38 Total Download Size:   1.71 MiB
+#23 27.38 Total Installed Size:  5.80 MiB
+#23 27.38 Net Upgrade Size:      0.77 MiB
+#23 27.38 
+#23 27.38 :: Proceed with installation? [Y/n] 
+#23 27.38 :: Retrieving packages...
+#23 34.16  cryptsetup-2.8.9-1-x86_64 downloading...
+#23 34.16  gpgme-2.3.1-1-x86_64 downloading...
+#23 34.16  libmicrohttpd-1.0.11-1-x86_64 downloading...
+#23 34.16  kmod-34.4-1-x86_64 downloading...
+#23 34.16  libseccomp-2.6.2-1-x86_64 downloading...
+#23 34.16 checking keyring...
+#23 34.33 checking package integrity...
+#23 ...
+
+#24 [gateway dependencies 2/2] RUN pacman -Syu --noconfirm --needed ca-certificates json-c mosquitto curl sqlite     && pacman -Scc --noconfirm
+#24 34.49  cryptsetup-2.8.9-1-x86_64 downloading...
+#24 34.49  mosquitto-2.1.2-3-x86_64 downloading...
+#24 34.49  gpgme-2.3.1-1-x86_64 downloading...
+#24 34.49  c-ares-1.34.9-1-x86_64 downloading...
+#24 34.49  kmod-34.4-1-x86_64 downloading...
+#24 34.49  libseccomp-2.6.2-1-x86_64 downloading...
+#24 34.49  cjson-1.7.19-1-x86_64 downloading...
+#24 34.49 checking keyring...
+#24 34.61 checking package integrity...
+#24 34.85 loading package files...
+#24 34.85 checking for file conflicts...
+#24 34.86 :: Processing package changes...
+#24 34.86 installing cjson...
+#24 34.86 installing c-ares...
+#24 34.87 installing mosquitto...
+#24 34.88 upgrading cryptsetup...
+#24 34.90 upgrading gpgme...
+#24 34.91 upgrading kmod...
+#24 34.92 upgrading libseccomp...
+#24 35.11 :: Running post-transaction hooks...
+#24 35.11 (1/4) Creating system user accounts...
+#24 35.19 Creating group 'mosquitto' with GID 969.
+#24 35.19 Creating user 'mosquitto' (Mosquitto MQTT Broker) with UID 969 and GID 969.
+#24 ...
+
+#23 [backend dependencies 2/2] RUN pacman -Syu --noconfirm --needed libmicrohttpd curl json-c ca-certificates     && pacman -Scc --noconfirm
+#23 34.50 loading package files...
+#23 34.51 checking for file conflicts...
+#23 34.51 :: Processing package changes...
+#23 34.51 installing libmicrohttpd...
+#23 34.51 upgrading cryptsetup...
+#23 34.53 upgrading gpgme...
+#23 34.54 upgrading kmod...
+#23 34.55 upgrading libseccomp...
+#23 34.73 :: Running post-transaction hooks...
+#23 34.73 (1/2) Creating temporary files...
+#23 34.81 /usr/lib/tmpfiles.d/journal-nocow.conf:26: Failed to resolve specifier: uninitialized /etc/ detected, skipping.
+#23 34.81 All rules containing unresolvable specifiers will be skipped.
+#23 34.83 (2/2) Arming ConditionNeedsUpdate...
+#23 34.97 
+#23 34.97 Cache directory: /var/cache/pacman/pkg/
+#23 34.97 :: Do you want to remove ALL files from cache? [y/N] 
+#23 34.97 
+#23 34.97 Database directory: /var/lib/pacman/
+#23 34.97 :: Do you want to remove unused repositories? [Y/n] 
+#23 34.97 removing unused sync repositories...
+#23 DONE 35.3s
+
+#24 [gateway dependencies 2/2] RUN pacman -Syu --noconfirm --needed ca-certificates json-c mosquitto curl sqlite     && pacman -Scc --noconfirm
+#24 35.31 (2/4) Creating temporary files...
+#24 35.40 /usr/lib/tmpfiles.d/journal-nocow.conf:26: Failed to resolve specifier: uninitialized /etc/ detected, skipping.
+#24 35.40 All rules containing unresolvable specifiers will be skipped.
+#24 35.42 (3/4) Reloading system manager configuration...
+#24 35.52   Skipped: Current root is not booted.
+#24 35.52 (4/4) Arming ConditionNeedsUpdate...
+#24 35.68 
+#24 35.68 Cache directory: /var/cache/pacman/pkg/
+#24 35.68 :: Do you want to remove ALL files from cache? [y/N] 
+#24 35.68 
+#24 35.68 Database directory: /var/lib/pacman/
+#24 35.68 :: Do you want to remove unused repositories? [Y/n] 
+#24 35.68 removing unused sync repositories...
+#24 DONE 35.7s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 0.284 resolving dependencies...
+#25 ...
+
+#26 [backend stage-2 1/2] RUN groupadd --gid 10001 backend     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/bin/nologin backend
+#26 DONE 0.5s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 0.601 looking for conflicting packages...
+#25 ...
+
+#22 [replayer dependencies 2/3] RUN pacman -Syu --noconfirm --needed bash mosquitto     && pacman -Scc --noconfirm
+#22 27.52  core downloading...
+#22 27.52  extra downloading...
+#22 27.54 warning: bash-5.3.20-1 is up to date -- skipping
+#22 27.77 :: Starting full system upgrade...
+#22 27.78 resolving dependencies...
+#22 27.78 looking for conflicting packages...
+#22 27.78 
+#22 27.78 Package (7)      Old Version  New Version  Net Change  Download Size
+#22 27.78 
+#22 27.78 extra/c-ares                  1.34.9-1       0.54 MiB       0.24 MiB
+#22 27.78 extra/cjson                   1.7.19-1       0.09 MiB       0.03 MiB
+#22 27.78 core/cryptsetup  2.8.8-2      2.8.9-1        0.14 MiB       0.87 MiB
+#22 27.78 core/gpgme       2.2.0-1      2.3.1-1        0.00 MiB       0.32 MiB
+#22 27.78 core/kmod        34.3-2       34.4-1         0.00 MiB       0.13 MiB
+#22 27.78 core/libseccomp  2.6.0-1      2.6.2-1        0.00 MiB       0.10 MiB
+#22 27.78 extra/mosquitto               2.1.2-3        1.83 MiB       0.53 MiB
+#22 27.78 
+#22 27.78 Total Download Size:   2.21 MiB
+#22 27.78 Total Installed Size:  7.64 MiB
+#22 27.78 Net Upgrade Size:      2.60 MiB
+#22 27.78 
+#22 27.78 :: Proceed with installation? [Y/n] 
+#22 27.78 :: Retrieving packages...
+#22 34.79  cryptsetup-2.8.9-1-x86_64 downloading...
+#22 34.79  mosquitto-2.1.2-3-x86_64 downloading...
+#22 34.79  gpgme-2.3.1-1-x86_64 downloading...
+#22 34.79  c-ares-1.34.9-1-x86_64 downloading...
+#22 34.79  kmod-34.4-1-x86_64 downloading...
+#22 34.79  libseccomp-2.6.2-1-x86_64 downloading...
+#22 34.79  cjson-1.7.19-1-x86_64 downloading...
+#22 34.79 checking keyring...
+#22 34.91 checking package integrity...
+#22 35.18 loading package files...
+#22 35.19 checking for file conflicts...
+#22 35.19 :: Processing package changes...
+#22 35.19 installing cjson...
+#22 35.19 installing c-ares...
+#22 35.20 installing mosquitto...
+#22 35.23 upgrading cryptsetup...
+#22 35.24 upgrading gpgme...
+#22 35.25 upgrading kmod...
+#22 35.26 upgrading libseccomp...
+#22 35.44 :: Running post-transaction hooks...
+#22 35.44 (1/4) Creating system user accounts...
+#22 35.53 Creating group 'mosquitto' with GID 969.
+#22 35.53 Creating user 'mosquitto' (Mosquitto MQTT Broker) with UID 969 and GID 969.
+#22 35.56 (2/4) Creating temporary files...
+#22 35.64 /usr/lib/tmpfiles.d/journal-nocow.conf:26: Failed to resolve specifier: uninitialized /etc/ detected, skipping.
+#22 35.64 All rules containing unresolvable specifiers will be skipped.
+#22 35.66 (3/4) Reloading system manager configuration...
+#22 35.75   Skipped: Current root is not booted.
+#22 35.75 (4/4) Arming ConditionNeedsUpdate...
+#22 35.92 
+#22 35.92 Cache directory: /var/cache/pacman/pkg/
+#22 35.92 :: Do you want to remove ALL files from cache? [y/N] 
+#22 35.92 
+#22 35.92 Database directory: /var/lib/pacman/
+#22 35.92 :: Do you want to remove unused repositories? [Y/n] 
+#22 35.92 removing unused sync repositories...
+#22 DONE 36.0s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 0.601 
+#25 0.601 Package (6)  New Version                 Net Change  Download Size
+#25 0.601 
+#25 0.601 core/gc      8.2.12-1                      0.76 MiB       0.23 MiB
+#25 0.601 core/guile   3.0.11-1                     54.49 MiB       8.39 MiB
+#25 0.601 core/libisl  0.28-1                        5.90 MiB       0.94 MiB
+#25 0.601 core/libmpc  1.4.1-1                       0.19 MiB       0.09 MiB
+#25 0.601 core/gcc     16.2.1+r23+gd564253eb6c8-1  220.89 MiB      57.93 MiB
+#25 0.601 core/make    4.4.1-3                       1.66 MiB       0.51 MiB
+#25 0.601 
+#25 0.601 Total Download Size:    68.08 MiB
+#25 0.601 Total Installed Size:  283.89 MiB
+#25 0.601 
+#25 0.602 :: Proceed with installation? [Y/n] 
+#25 0.602 :: Retrieving packages...
+#25 ...
+
+#27 [gateway stage-2 1/3] RUN groupadd --gid 10001 gateway     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/bin/nologin gateway     && install -d -o gateway -g gateway -m 0750 /data
+#27 DONE 0.4s
+
+#28 [replayer dependencies 3/3] RUN bash -c '((BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1)))'
+#28 DONE 0.3s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 0.255 resolving dependencies...
+#29 ...
+
+#30 [replayer stage-2 1/4] RUN groupadd --gid 10001 replayer     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/bin/nologin replayer
+#30 DONE 0.3s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 0.501 looking for conflicting packages...
+#29 0.502 
+#29 0.502 Package (7)   New Version                 Net Change  Download Size
+#29 0.502 
+#29 0.502 core/gc       8.2.12-1                      0.76 MiB       0.23 MiB
+#29 0.502 core/guile    3.0.11-1                     54.49 MiB       8.39 MiB
+#29 0.502 core/libisl   0.28-1                        5.90 MiB       0.94 MiB
+#29 0.502 core/libmpc   1.4.1-1                       0.19 MiB       0.09 MiB
+#29 0.502 core/gcc      16.2.1+r23+gd564253eb6c8-1  220.89 MiB      57.93 MiB
+#29 0.502 core/make     4.4.1-3                       1.66 MiB       0.51 MiB
+#29 0.502 core/pkgconf  3.0.11-1                      0.34 MiB       0.12 MiB
+#29 0.502 
+#29 0.502 Total Download Size:    68.20 MiB
+#29 0.502 Total Installed Size:  284.24 MiB
+#29 0.502 
+#29 0.502 :: Proceed with installation? [Y/n] 
+#29 0.503 :: Retrieving packages...
+#29 ...
+
+#31 [gateway build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#31 0.347 resolving dependencies...
+#31 0.644 looking for conflicting packages...
+#31 0.645 
+#31 0.645 Package (7)   New Version                 Net Change  Download Size
+#31 0.645 
+#31 0.645 core/gc       8.2.12-1                      0.76 MiB       0.23 MiB
+#31 0.645 core/guile    3.0.11-1                     54.49 MiB       8.39 MiB
+#31 0.645 core/libisl   0.28-1                        5.90 MiB       0.94 MiB
+#31 0.645 core/libmpc   1.4.1-1                       0.19 MiB       0.09 MiB
+#31 0.645 core/gcc      16.2.1+r23+gd564253eb6c8-1  220.89 MiB      57.93 MiB
+#31 0.645 core/make     4.4.1-3                       1.66 MiB       0.51 MiB
+#31 0.645 core/pkgconf  3.0.11-1                      0.34 MiB       0.12 MiB
+#31 0.645 
+#31 0.645 Total Download Size:    68.20 MiB
+#31 0.645 Total Installed Size:  284.24 MiB
+#31 0.645 
+#31 0.645 :: Proceed with installation? [Y/n] 
+#31 0.646 :: Retrieving packages...
+#31 83.00  gcc-16.2.1+r23+gd564253eb6c8-1-x86_64 downloading...
+#31 83.00  guile-3.0.11-1-x86_64 downloading...
+#31 83.00  libisl-0.28-1-x86_64 downloading...
+#31 83.00  make-4.4.1-3-x86_64 downloading...
+#31 83.00  gc-8.2.12-1-x86_64 downloading...
+#31 83.00  pkgconf-3.0.11-1-x86_64 downloading...
+#31 83.00  libmpc-1.4.1-1-x86_64 downloading...
+#31 83.00 checking keyring...
+#31 83.14 checking package integrity...
+#31 83.62 loading package files...
+#31 83.65 checking for file conflicts...
+#31 83.67 :: Processing package changes...
+#31 83.67 installing libisl...
+#31 83.71 installing libmpc...
+#31 83.71 installing gcc...
+#31 84.47 Optional dependencies for gcc
+#31 84.47     lib32-gcc-libs: for generating code for 32-bit ABI
+#31 84.47 installing gc...
+#31 84.47 installing guile...
+#31 84.70 installing make...
+#31 84.71 installing pkgconf...
+#31 85.23 :: Running post-transaction hooks...
+#31 85.23 (1/1) Arming ConditionNeedsUpdate...
+#31 85.36 
+#31 85.36 Cache directory: /var/cache/pacman/pkg/
+#31 85.36 :: Do you want to remove ALL files from cache? [y/N] 
+#31 85.36 
+#31 85.36 Database directory: /var/lib/pacman/
+#31 85.36 :: Do you want to remove unused repositories? [Y/n] 
+#31 85.36 removing unused sync repositories...
+#31 DONE 86.7s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 ...
+
+#32 [gateway build 2/6] WORKDIR /src
+#32 DONE 0.1s
+
+#33 [gateway build 3/6] COPY Makefile ./
+#33 DONE 0.1s
+
+#34 [gateway build 4/6] COPY include/ include/
+#34 DONE 0.1s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 ...
+
+#35 [gateway build 5/6] COPY src/ src/
+#35 DONE 0.1s
+
+#36 [gateway build 6/6] RUN make all
+#36 0.188 mkdir -p build
+#36 0.194 gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -c -o build/gateway_telemetry.o src/gateway_telemetry.c
+#36 0.271 gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic -c -o build/mqtt_subscriber.o src/mqtt_subscriber.c
+#36 0.365 gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic -c -o build/interscity_mapping.o src/interscity_mapping.c
+#36 0.440 gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -c -o build/interscity_payload.o src/interscity_payload.c
+#36 0.517 gcc -Iinclude  -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -c -o build/interscity_client.o src/interscity_client.c
+#36 0.659 gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic -c -o build/telemetry_queue.o src/telemetry_queue.c
+#36 0.753 gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -pthread -c -o build/delivery_worker.o src/delivery_worker.c
+#36 0.855 gcc -Iinclude -I/usr/include/json-c   -std=c11 -Wall -Wextra -Wpedantic -pthread  -o build/iot-gateway src/main.c build/gateway_telemetry.o build/mqtt_subscriber.o build/interscity_mapping.o build/interscity_payload.o build/interscity_client.o build/telemetry_queue.o build/delivery_worker.o -ljson-c -lmosquitto -lcurl -lsqlite3 
+#36 DONE 1.1s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 ...
+
+#37 [gateway stage-2 2/3] COPY --from=build /src/build/iot-gateway /usr/local/bin/iot-gateway
+#37 DONE 0.1s
+
+#38 [gateway stage-2 3/3] WORKDIR /data
+#38 DONE 0.1s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 ...
+
+#39 [gateway] exporting to image
+#39 exporting layers
+#39 exporting layers 0.7s done
+#39 exporting manifest sha256:6495bf20c59b6009323be0afce35c51ae7324f435257b2b5eec0ccabc595d556 0.0s done
+#39 exporting config sha256:e8ad42b16b701657a36a5d8f5555baed6eb5eaa54f4d9c678bd7c731c59045b7 0.0s done
+#39 exporting attestation manifest sha256:ae04e0ae7320ea336592bdeac8e3fe376b7eeecfad35915fcfedae50660839e1 0.0s done
+#39 exporting manifest list sha256:0d7e435ccc83ae7daffc8092df886ac5e90cc058ee6890945f502395e938a43f 0.0s done
+#39 naming to docker.io/library/sim103-validation-gateway:latest done
+#39 unpacking to docker.io/library/sim103-validation-gateway:latest
+#39 unpacking to docker.io/library/sim103-validation-gateway:latest 4.7s done
+#39 DONE 5.5s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 ...
+
+#40 [gateway] resolving provenance for metadata file
+#40 DONE 0.0s
+
+#25 [backend build 1/6] RUN pacman -S --noconfirm --needed gcc make     && pacman -Scc --noconfirm
+#25 111.9  gcc-16.2.1+r23+gd564253eb6c8-1-x86_64 downloading...
+#25 111.9  guile-3.0.11-1-x86_64 downloading...
+#25 111.9  libisl-0.28-1-x86_64 downloading...
+#25 111.9  make-4.4.1-3-x86_64 downloading...
+#25 111.9  gc-8.2.12-1-x86_64 downloading...
+#25 111.9  libmpc-1.4.1-1-x86_64 downloading...
+#25 111.9 checking keyring...
+#25 112.1 checking package integrity...
+#25 112.5 loading package files...
+#25 112.6 checking for file conflicts...
+#25 112.6 :: Processing package changes...
+#25 112.6 installing libisl...
+#25 112.6 installing libmpc...
+#25 112.6 installing gcc...
+#25 113.5 Optional dependencies for gcc
+#25 113.5     lib32-gcc-libs: for generating code for 32-bit ABI
+#25 113.5 installing gc...
+#25 113.5 installing guile...
+#25 113.7 installing make...
+#25 114.2 :: Running post-transaction hooks...
+#25 114.2 (1/1) Arming ConditionNeedsUpdate...
+#25 114.4 
+#25 114.4 Cache directory: /var/cache/pacman/pkg/
+#25 114.4 :: Do you want to remove ALL files from cache? [y/N] 
+#25 114.4 
+#25 114.4 Database directory: /var/lib/pacman/
+#25 114.4 :: Do you want to remove unused repositories? [Y/n] 
+#25 114.4 removing unused sync repositories...
+#25 DONE 115.2s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 ...
+
+#41 [backend build 2/6] WORKDIR /src
+#41 DONE 0.2s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 ...
+
+#42 [backend build 3/6] COPY Makefile ./
+#42 DONE 0.1s
+
+#43 [backend build 4/6] COPY include/ include/
+#43 DONE 0.1s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 ...
+
+#44 [backend build 5/6] COPY src/ src/
+#44 DONE 0.1s
+
+#45 [backend build 6/6] RUN make all
+#45 0.221 mkdir -p build
+#45 0.226 gcc -std=c11 -Wall -Wextra -Wpedantic -Iinclude -I/usr/include/json-c -o build/backend src/main.c src/http_server.c src/routes.c src/machine_map.c src/interscity_query.c src/static_files.c -lmicrohttpd -lcurl -ljson-c
+#45 DONE 0.8s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 ...
+
+#46 [backend stage-2 2/2] COPY --from=build /src/build/backend /usr/local/bin/backend
+#46 DONE 0.1s
+
+#47 [backend] exporting to image
+#47 exporting layers
+#47 exporting layers 0.5s done
+#47 exporting manifest sha256:384da3c1057e16100b0b9bc5292dcccd23743804d117d2830976964e7730b28f 0.0s done
+#47 exporting config sha256:d4d8efe62535859b2864d35487bf5222cc94378725d0061e791ce807c71a5e69 0.0s done
+#47 exporting attestation manifest sha256:c2fb0c86e2156433b935fbdc225bee5f5bdc5cd0c90a3e04e8013573ffbd5340 0.0s done
+#47 exporting manifest list sha256:d1671cf6ff20b48365752d903f2dbeea8936dca8e69be4357b312721c5042269 0.0s done
+#47 naming to docker.io/library/sim103-validation-backend:latest done
+#47 unpacking to docker.io/library/sim103-validation-backend:latest 0.1s done
+#47 DONE 0.8s
+
+#48 [backend] resolving provenance for metadata file
+#48 DONE 0.0s
+
+#29 [replayer build 1/6] RUN pacman -S --noconfirm --needed gcc make pkgconf     && pacman -Scc --noconfirm
+#29 118.1  gcc-16.2.1+r23+gd564253eb6c8-1-x86_64 downloading...
+#29 118.1  guile-3.0.11-1-x86_64 downloading...
+#29 118.1  libisl-0.28-1-x86_64 downloading...
+#29 118.1  make-4.4.1-3-x86_64 downloading...
+#29 118.1  gc-8.2.12-1-x86_64 downloading...
+#29 118.1  pkgconf-3.0.11-1-x86_64 downloading...
+#29 118.1  libmpc-1.4.1-1-x86_64 downloading...
+#29 118.1 checking keyring...
+#29 118.3 checking package integrity...
+#29 118.7 loading package files...
+#29 118.8 checking for file conflicts...
+#29 118.8 :: Processing package changes...
+#29 118.8 installing libisl...
+#29 118.8 installing libmpc...
+#29 118.8 installing gcc...
+#29 119.6 Optional dependencies for gcc
+#29 119.6     lib32-gcc-libs: for generating code for 32-bit ABI
+#29 119.6 installing gc...
+#29 119.6 installing guile...
+#29 119.9 installing make...
+#29 119.9 installing pkgconf...
+#29 120.4 :: Running post-transaction hooks...
+#29 120.4 (1/1) Arming ConditionNeedsUpdate...
+#29 120.5 
+#29 120.5 Cache directory: /var/cache/pacman/pkg/
+#29 120.5 :: Do you want to remove ALL files from cache? [y/N] 
+#29 120.5 
+#29 120.5 Database directory: /var/lib/pacman/
+#29 120.5 :: Do you want to remove unused repositories? [Y/n] 
+#29 120.5 removing unused sync repositories...
+#29 DONE 121.3s
+
+#49 [replayer build 2/6] WORKDIR /src
+#49 DONE 0.1s
+
+#50 [replayer build 3/6] COPY Makefile ./
+#50 DONE 0.1s
+
+#51 [replayer build 4/6] COPY include/ include/
+#51 DONE 0.1s
+
+#52 [replayer build 5/6] COPY src/ src/
+#52 DONE 0.1s
+
+#53 [replayer build 6/6] RUN make all
+#53 0.235 mkdir -p build
+#53 0.239 gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic -c -o build/telemetry_json.o src/telemetry_json.c
+#53 0.316 gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic -c -o build/mqtt_publisher.o src/mqtt_publisher.c
+#53 0.389 gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic  -o build/dataset-replayer src/main.c src/csv_reader.c src/telemetry.c build/telemetry_json.o build/mqtt_publisher.o -lmosquitto 
+#53 DONE 0.7s
+
+#54 [replayer stage-2 2/4] COPY --from=build /src/build/dataset-replayer /app/dataset-replayer/build/dataset-replayer
+#54 DONE 0.1s
+
+#55 [replayer stage-2 3/4] COPY scripts/run-ten-machines.sh /app/dataset-replayer/scripts/run-ten-machines.sh
+#55 DONE 0.1s
+
+#56 [replayer stage-2 4/4] WORKDIR /app
+#56 DONE 0.1s
+
+#57 [replayer] exporting to image
+#57 exporting layers
+#57 exporting layers 0.6s done
+#57 exporting manifest sha256:5e1edeb184868ca6e6489eb8fea4b7e2d3d2f46788da5c79010c1ce0067bb6d2 0.0s done
+#57 exporting config sha256:424dd8c5c505c3d0b0705a70e9ab53bbe80dd33a8aceaf4d43c6b99f0ea32371 0.0s done
+#57 exporting attestation manifest sha256:b792722f743163cae1ffdfe158a44ac668e8028a715328b8de56d723efe4a691 0.0s done
+#57 exporting manifest list sha256:cd54339a3d2b8c02fa40371950a587642fef8d6dc59f8155e6f7cf5323fd3fe7 0.0s done
+#57 naming to docker.io/library/sim103-validation-replayer:latest done
+#57 unpacking to docker.io/library/sim103-validation-replayer:latest
+#57 unpacking to docker.io/library/sim103-validation-replayer:latest 0.3s done
+#57 DONE 1.0s
+
+#58 [replayer] resolving provenance for metadata file
+#58 DONE 0.0s
+ Image sim103-validation-backend Built 
+ Image sim103-validation-gateway Built 
+ Image sim103-validation-interscity-fake Built 
+ Image sim103-validation-replayer Built 

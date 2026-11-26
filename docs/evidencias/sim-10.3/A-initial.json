@@ -1,0 +1,14 @@
+{
+  "rows": [],
+  "cursors": [],
+  "wal": [
+    {
+      "journal_mode": "wal"
+    }
+  ],
+  "integrity": [
+    {
+      "integrity_check": "ok"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+make: Entering directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway'
+gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic -c -o build/telemetry_queue.o src/telemetry_queue.c
+gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic  -o build/test_telemetry_queue tests/test_telemetry_queue.c build/telemetry_queue.o -lsqlite3 
+gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -c -o build/gateway_telemetry.o src/gateway_telemetry.c
+gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic  -o build/test_gateway_telemetry tests/test_gateway_telemetry.c build/gateway_telemetry.o -ljson-c 
+gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic -c -o build/mqtt_subscriber.o src/mqtt_subscriber.c
+gcc -Iinclude  -std=c11 -Wall -Wextra -Wpedantic  -o build/test_mqtt_subscriber tests/test_mqtt_subscriber.c build/mqtt_subscriber.o -lmosquitto 
+gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic -c -o build/interscity_mapping.o src/interscity_mapping.c
+gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic  -o build/test_interscity_mapping tests/test_interscity_mapping.c build/interscity_mapping.o 
+gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -c -o build/interscity_payload.o src/interscity_payload.c
+gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic  -o build/test_interscity_payload tests/test_interscity_payload.c build/interscity_payload.o -ljson-c 
+gcc -Iinclude  -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -c -o build/interscity_client.o src/interscity_client.c
+gcc -Iinclude -std=c11 -Wall -Wextra -Wpedantic  -o build/test_interscity_client tests/test_interscity_client.c build/interscity_client.o -lcurl -ljson-c 
+gcc -Iinclude -I/usr/include/json-c -std=c11 -Wall -Wextra -Wpedantic -pthread -c -o build/delivery_worker.o src/delivery_worker.c
+gcc -Iinclude -I/usr/include/json-c   -std=c11 -Wall -Wextra -Wpedantic -pthread  -o build/iot-gateway src/main.c build/gateway_telemetry.o build/mqtt_subscriber.o build/interscity_mapping.o build/interscity_payload.o build/interscity_client.o build/telemetry_queue.o build/delivery_worker.o -ljson-c -lmosquitto -lcurl -lsqlite3 
+./build/test_telemetry_queue
+Todos os testes de telemetry_queue passaram (WAL, estados, cursor, rollback e conexões separadas).
+./build/test_gateway_telemetry
+Estrito [UTF-8 overlong C0 AF]: rejeitado
+Estrito [UTF-8 surrogate]: rejeitado
+Estrito [UTF-8 > U+10FFFF]: rejeitado
+Estrito [UTF-8 incompleto]: rejeitado
+Estrito [continuação incorreta]: rejeitado
+Estrito [continuação isolada]: rejeitado
+Estrito [overlong 3 bytes]: rejeitado
+Estrito [overlong 4 bytes]: rejeitado
+Estrito [chave com aspas simples]: rejeitado
+Estrito [1.]: rejeitado
+Estrito [01]: rejeitado
+Estrito [-01]: rejeitado
+Estrito [00]: rejeitado
+Estrito [01.5]: rejeitado
+Estrito [-.5]: rejeitado
+Estrito [1.e2]: rejeitado
+Estrito [1e]: rejeitado
+Estrito [1e+]: rejeitado
+Todos os testes de gateway_telemetry passaram.
+./build/test_mqtt_subscriber
+Todos os testes locais de mqtt_subscriber passaram.
+./build/test_interscity_mapping
+test_interscity_mapping: todos os testes passaram.
+./build/test_interscity_payload
+test_interscity_payload: todos os testes passaram.
+python3 -B tests/test_interscity_client.py
+test_interscity_client: todos os testes C passaram.
+PASS: cliente HTTP com 7 requisições conferidas (201, 400, 500, timeout, porta fechada e reuso de conexão)
+PASS: 25 consultas conferidas (UUID, datas UTC completas e recuperação)
+python3 -B tests/test_cli.py
+PASS: CLI --help e argumentos inválidos, sem broker
+python3 -B tests/test_interscity_gateway.py
+PASS: opções InterSCity, mapeamento inválido e mapeamento real, sem broker
+python3 -B tests/test_durable_queue.py
+PASS: fila CLI, combinações, mapa/SQLite antes de MQTT e limpeza na falha de conexão
+make: Leaving directory '/home/lgfas/projects/ufma/sistemas-distribuidos/smart-industry-monitor/iot-gateway'
